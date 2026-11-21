@@ -95,7 +95,7 @@ fn void? desktop_session_init(DesktopSession* session, int argc, ZString* argv) 
 	*session = {};
 	desktop_host_init(&session.platform, &session.host)!;
 
-	String path = "./build/game.punk";
+	String path = "./examples/game.punk";
 	desktop_load_cart(&session.cart, path)!;
 }
 
