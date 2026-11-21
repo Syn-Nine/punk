@@ -14,14 +14,12 @@ struct DesktopCart {
 }
 
 
-// session owns the game, host interface, platform, and diagnostics objects
+// session owns the game, game cart, host interface, and platform
 struct DesktopSession {
 	// Game game;
 	Host host;
 	DesktopCart cart;
 	DesktopPlatform platform;
-	SdlWindow* window;
-	SdlRenderer* renderer;
 }
 
 

@@ -1,6 +1,7 @@
 // diagnostic collection and reporting
 
 module punk;
+import std::collections;
 import std::io;
 
 enum Severity {
