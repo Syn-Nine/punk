@@ -1,5 +1,6 @@
+//-----------------------------------------------------------------------------
 // diagnostic collection and reporting
-
+//-----------------------------------------------------------------------------
 module punk;
 import std::collections;
 import std::io;
@@ -8,8 +9,16 @@ enum Severity {
 	INFO,
 	ERROR,
 }
-EnumMap{Severity,String} severity2text = {{"INFO", "ERROR"}};
 
+EnumMap{Severity,String} severity2text = {{
+	"INFO",
+	"ERROR"
+}};
+
+
+//-----------------------------------------------------------------------------
+// FUNCTIONS
+//-----------------------------------------------------------------------------
 
 // print diagnostic message to console
 //-----------------------------------------------------------------------------

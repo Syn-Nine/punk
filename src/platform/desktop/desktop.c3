@@ -1,13 +1,22 @@
+//-----------------------------------------------------------------------------
 // desktop platform utilities
-
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
 import sdl3;
 
-const usz MAX_SCRIPT_BYTES = 64 * 1024; // 64KiB package code size limit
-const usz MAX_FILE_BYTES = 1024 * 1024; // 1MiB size limit for any file
-const usz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire package zip
+//-----------------------------------------------------------------------------
+// CONSTANTS
+//-----------------------------------------------------------------------------
 
+const sz MAX_SCRIPT_BYTES = 64 * 1024; // 64KiB package code size limit
+const sz MAX_FILE_BYTES = 1024 * 1024; // 1MiB size limit for any file
+const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire package zip
+
+
+//-----------------------------------------------------------------------------
+// STRUCTURES
+//-----------------------------------------------------------------------------
 
 struct DesktopPlatform {
 	SdlWindow* window;
@@ -15,11 +24,17 @@ struct DesktopPlatform {
 }
 
 
-// init the desktop-host connection
 //-----------------------------------------------------------------------------
-fn void? desktop_host_init(DesktopPlatform* platform, Host* host) {
-	diagnostics_print(INFO, "Initializing Desktop Host");
+// FUNCTIONS
+//-----------------------------------------------------------------------------
 
+// init the desktop platform layer
+//-----------------------------------------------------------------------------
+fn void? desktop_platform_init(DesktopPlatform* platform) {
+	diagnostics_print(INFO, "Initializing Desktop Platform");
+
+	*platform = {};
+	
 	if (!sdl3::init({ .video = true })) {
 		diagnostics_print(ERROR, string::tformat("Failed to initialize SDL: %s", sdl3::getError()));
 		return SDL_ERROR~;
@@ -38,29 +53,32 @@ fn void? desktop_host_init(DesktopPlatform* platform, Host* host) {
 	sdl3::setRenderLogicalPresentation(platform.renderer, 320, 180, LETTERBOX);
 	sdl3::setRenderVSync(platform.renderer, (SdlRendererVSync)1);
 	
+
 }
 
 
-// shutdown the desktop-host connection
+// shutdown the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void desktop_host_shutdown(DesktopPlatform* platform, Host* host) {
-	diagnostics_print(INFO, "Shutdown Desktop Host");
+fn void desktop_platform_shutdown(DesktopPlatform* platform) {
+	diagnostics_print(INFO, "Shutting Down Desktop Platform");
 
 	sdl3::destroyRenderer(platform.renderer);
 	sdl3::destroyWindow(platform.window);
 	
 	*platform = {};
-	*host = {};
 }
 
 
 // load game cart
 //-----------------------------------------------------------------------------
-fn void? desktop_load_cart(DesktopCart* cart, String path) {
+fn void? desktop_load_cart(Cart* cart, String path) {
 	diagnostics_print(INFO, "Loading Game Cart");
 	
 	// read game code bytes from disk
 	desktop_read_file(path, &cart.file_bytes)!;	
+
+	// compile game code
+
 }
 
 
@@ -81,7 +99,7 @@ fn void? desktop_read_file(String path, ByteBuffer* output) => @pool() {
 	long? size = fp.size();
 	if (catch err = size) return IO_ERROR~;
 
-	if ((usz)size > MAX_SCRIPT_BYTES) {
+	if (size > MAX_SCRIPT_BYTES) {
 		diagnostics_print(ERROR, "Script size limit exceeded");
 		return IO_ERROR~;
 	}
