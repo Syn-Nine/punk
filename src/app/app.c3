@@ -9,10 +9,10 @@ import sdl3;
 //-----------------------------------------------------------------------------
 
 // session owns the game, game cart, and platform
-struct DesktopSession {
+struct Session {
 	Game game;
 	Cart cart;
-	DesktopPlatform platform;
+	Platform platform;
 }
 
 
@@ -32,11 +32,11 @@ fn int main(String[] argv) {
 //-----------------------------------------------------------------------------
 fn SdlAppResult sdl_app_init(void** appstate, int argc, ZString* argv) {
 	
-	DesktopSession* session = mem::new(DesktopSession);
+	Session* session = mem::new(Session);
 	*appstate = session;
 	
 	// initialize the desktop session and launch the game
-	if (catch err = desktop_session_init(session, argc, argv)) return FAILURE;
+	if (catch err = session_init(session, argc, argv)) return FAILURE;
 	
 	return CONTINUE;
 }
@@ -45,7 +45,9 @@ fn SdlAppResult sdl_app_init(void** appstate, int argc, ZString* argv) {
 // SDL iteration callaback
 //-----------------------------------------------------------------------------
 fn SdlAppResult sdl_app_iter(void* appstate) {
-	DesktopSession* session = appstate;
+	Session* session = appstate;
+
+	game_frame(&session.game);
 	
 	return CONTINUE;
 }
@@ -54,12 +56,38 @@ fn SdlAppResult sdl_app_iter(void* appstate) {
 // SDL event callback
 //-----------------------------------------------------------------------------
 fn SdlAppResult sdl_app_evt(void* appstate, SdlEvent* event) {
-	DesktopSession* session = appstate;
+	Session* session = appstate;
 
 	switch (event.type) {
 		case QUIT: return SUCCESS;
+		case WINDOW_FOCUS_LOST:
+			input_push(&session.game.input, { .kind = FOCUS_LOST });
+
 		case KEY_DOWN:
 			if (event.key.scancode == ESCAPE) return SUCCESS;
+			nextcase;
+			// fall-through
+		case KEY_UP:
+			if (event.key.repeat) break;
+			
+			InputAction action = INVALID;
+			switch (event.key.scancode) {
+				case UP: 	action = UP;
+				case DOWN: 	action = DOWN;
+				case LEFT: 	action = LEFT;
+				case RIGHT: action = RIGHT;
+				case SPACE: action = FIRE;
+			}
+			if (action == INVALID) break;
+
+			InputEvent evt = {
+				.kind = ACTION,
+				.action = action,
+				.down = event.type == KEY_DOWN,
+			};
+
+			input_push(&session.game.input, evt);
+
 	}
 
 	return CONTINUE;
@@ -70,34 +98,36 @@ fn SdlAppResult sdl_app_evt(void* appstate, SdlEvent* event) {
 //-----------------------------------------------------------------------------
 fn void sdl_app_quit(void* appstate, SdlAppResult result) {
 	if (appstate != null) {
-		DesktopSession* session = appstate;
-		desktop_session_shutdown(session);
+		Session* session = appstate;
+		session_shutdown(session);
 	}
 }
 
 
 // initialize the desktop game session and launch the game
 //-----------------------------------------------------------------------------
-fn void? desktop_session_init(DesktopSession* session, int argc, ZString* argv) {
+fn void? session_init(Session* session, int argc, ZString* argv) {
 	diagnostics_print(INFO, "Initializing Session");
 	
 	*session = {};
-	desktop_platform_init(&session.platform)!;
+	platform_init(&session.platform)!;
 
 	String path = "./examples/game.punk";
-	desktop_load_cart(&session.cart, path)!;
+	load_cart(&session.cart, path)!;
 
-	game_launch(&session.game, &session.cart)!;
+	game_launch(&session.game, &session.cart, &session.platform)!;
+
+	// platform
 }
 
 
 // shutdown the desktop game session
 //-----------------------------------------------------------------------------
-fn void desktop_session_shutdown(DesktopSession* session) {
+fn void session_shutdown(Session* session) {
 	diagnostics_print(INFO, "Shutting Down Punk Desktop");
 	
 	// free resources
 	game_shutdown(&session.game);
-	desktop_platform_shutdown(&session.platform);
+	platform_shutdown(&session.platform);
 }
 

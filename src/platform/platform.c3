@@ -18,9 +18,10 @@ const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire 
 // STRUCTURES
 //-----------------------------------------------------------------------------
 
-struct DesktopPlatform {
+struct Platform {
 	SdlWindow* window;
 	SdlRenderer* renderer;
+	ulong prev_ticks;
 }
 
 
@@ -30,7 +31,7 @@ struct DesktopPlatform {
 
 // init the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void? desktop_platform_init(DesktopPlatform* platform) {
+fn void? platform_init(Platform* platform) {
 	diagnostics_print(INFO, "Initializing Desktop Platform");
 
 	*platform = {};
@@ -59,7 +60,7 @@ fn void? desktop_platform_init(DesktopPlatform* platform) {
 
 // shutdown the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void desktop_platform_shutdown(DesktopPlatform* platform) {
+fn void platform_shutdown(Platform* platform) {
 	diagnostics_print(INFO, "Shutting Down Desktop Platform");
 
 	sdl3::destroyRenderer(platform.renderer);
@@ -71,11 +72,11 @@ fn void desktop_platform_shutdown(DesktopPlatform* platform) {
 
 // load game cart
 //-----------------------------------------------------------------------------
-fn void? desktop_load_cart(Cart* cart, String path) {
+fn void? load_cart(Cart* cart, String path) {
 	diagnostics_print(INFO, "Loading Game Cart");
 	
 	// read game code bytes from disk
-	desktop_read_file(path, &cart.file_bytes)!;	
+	read_file(path, &cart.file_bytes)!;	
 
 	// compile game code
 
@@ -84,7 +85,7 @@ fn void? desktop_load_cart(Cart* cart, String path) {
 
 // read file bytes
 //-----------------------------------------------------------------------------
-fn void? desktop_read_file(String path, ByteBuffer* output) => @pool() {
+fn void? read_file(String path, ByteBuffer* output) => @pool() {
 	diagnostics_print(INFO, "Reading File: ".concat(tmem, path));
 	*output = {};
 

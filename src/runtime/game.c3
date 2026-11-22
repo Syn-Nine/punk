@@ -16,6 +16,8 @@ struct Cart {
 
 struct Game {
 	Cart* cart;
+	Platform* platform;
+	InputState input;
 }
 
 
@@ -26,10 +28,17 @@ struct Game {
 
 // launch the compiled game
 //-----------------------------------------------------------------------------
-fn void? game_launch(Game* game, Cart* cart) {
+fn void? game_launch(Game* game, Cart* cart, Platform* platform) {
 	diagnostics_print(INFO, "Launching Game");
-	*game = { .cart = cart };
+	*game = { .cart = cart, .platform = platform };
+}
 
+
+fn void game_frame(Game* game) {
+	// determine how many simulation steps to perform
+	// for each step
+		// process the input event queue
+		input_process(&game.input);
 
 }
 
