@@ -36,7 +36,7 @@ fn SdlAppResult sdl_app_init(void** appstate, int argc, ZString* argv) {
 	*appstate = session;
 	
 	// initialize the desktop session and launch the game
-	if (catch err = session_init(session, argc, argv)) return FAILURE;
+	if (catch err = session.init(argc, argv)) return FAILURE;
 	
 	return CONTINUE;
 }
@@ -47,7 +47,7 @@ fn SdlAppResult sdl_app_init(void** appstate, int argc, ZString* argv) {
 fn SdlAppResult sdl_app_iter(void* appstate) {
 	Session* session = appstate;
 
-	game_frame(&session.game);
+	if (catch err = session.game.frame()) return FAILURE;
 	
 	return CONTINUE;
 }
@@ -57,11 +57,12 @@ fn SdlAppResult sdl_app_iter(void* appstate) {
 //-----------------------------------------------------------------------------
 fn SdlAppResult sdl_app_evt(void* appstate, SdlEvent* event) {
 	Session* session = appstate;
+	InputState* input = &session.game.input;
 
 	switch (event.type) {
 		case QUIT: return SUCCESS;
 		case WINDOW_FOCUS_LOST:
-			input_push(&session.game.input, { .kind = FOCUS_LOST });
+			input.push({ .kind = FOCUS_LOST });
 
 		case KEY_DOWN:
 			if (event.key.scancode == ESCAPE) return SUCCESS;
@@ -86,7 +87,7 @@ fn SdlAppResult sdl_app_evt(void* appstate, SdlEvent* event) {
 				.down = event.type == KEY_DOWN,
 			};
 
-			input_push(&session.game.input, evt);
+			input.push(evt);
 
 	}
 
@@ -99,23 +100,23 @@ fn SdlAppResult sdl_app_evt(void* appstate, SdlEvent* event) {
 fn void sdl_app_quit(void* appstate, SdlAppResult result) {
 	if (appstate != null) {
 		Session* session = appstate;
-		session_shutdown(session);
+		session.shutdown();
 	}
 }
 
 
 // initialize the desktop game session and launch the game
 //-----------------------------------------------------------------------------
-fn void? session_init(Session* session, int argc, ZString* argv) {
+fn void? Session.init(Session* session, int argc, ZString* argv) {
 	diagnostics_print(INFO, "Initializing Session");
 	
 	*session = {};
-	platform_init(&session.platform)!;
+	session.platform.init()!;
 
 	String path = "./examples/game.punk";
 	platform_load_cart(&session.cart, path)!;
 
-	game_launch(&session.game, &session.cart, &session.platform)!;
+	session.game.launch(&session.cart, &session.platform)!;
 
 	// platform
 }
@@ -123,11 +124,11 @@ fn void? session_init(Session* session, int argc, ZString* argv) {
 
 // shutdown the desktop game session
 //-----------------------------------------------------------------------------
-fn void session_shutdown(Session* session) {
+fn void Session.shutdown(Session* session) {
 	diagnostics_print(INFO, "Shutting Down Punk Desktop");
 	
 	// free resources
-	game_shutdown(&session.game);
-	platform_shutdown(&session.platform);
+	session.game.shutdown();
+	session.platform.shutdown();
 }
 

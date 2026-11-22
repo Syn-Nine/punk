@@ -3,9 +3,11 @@
 //-----------------------------------------------------------------------------
 module punk;
 import std::io;
+import std::collections;
+
 
 //-----------------------------------------------------------------------------
-// STRUCTURES
+// ENUMERATIONS
 //-----------------------------------------------------------------------------
 
 enum InputAction : int {
@@ -24,8 +26,17 @@ enum InputEventKind {
 }
 
 
+//-----------------------------------------------------------------------------
+// CONSTANTS
+//-----------------------------------------------------------------------------
+
 const ACTION_COUNT = InputAction::len;
 const MAX_INPUT_QUEUE_COUNT = 256;
+
+
+//-----------------------------------------------------------------------------
+// STRUCTURES
+//-----------------------------------------------------------------------------
 
 struct ActionState {
 	bool pressed;
@@ -60,7 +71,7 @@ struct InputState {
 
 // add an event to the input queue
 //-----------------------------------------------------------------------------
-fn void input_push(InputState* input, InputEvent evt) {
+fn void InputState.push(InputState* input, InputEvent evt) {
 	if (input.queue.overflowed) return;
 	if (input.queue.count >= MAX_INPUT_QUEUE_COUNT) {
 		input.queue.overflowed = true;
@@ -74,7 +85,7 @@ fn void input_push(InputState* input, InputEvent evt) {
 
 // clear action edges
 //-----------------------------------------------------------------------------
-fn void input_clear_edges(InputState* input) {
+fn void InputState.clear_edges(InputState* input) {
 	input.pressed = {};
 	input.released = {};
 }
@@ -82,16 +93,16 @@ fn void input_clear_edges(InputState* input) {
 
 // clear action held and edges
 //-----------------------------------------------------------------------------
-fn void input_clear_held_and_edges(InputState* input) {
+fn void InputState.clear_held_and_edges(InputState* input) {
 	input.held = {};
-	input_clear_edges(input);
+	input.clear_edges();
 }
 
 
 // clear the input event queue
 //-----------------------------------------------------------------------------
-fn void input_queue_reset(InputState* input) {
-	input_clear_held_and_edges(input);
+fn void InputState.queue_reset(InputState* input) {
+	input.clear_held_and_edges();
 	input.queue.count = 0;
 	input.queue.overflowed = false;
 }
@@ -99,7 +110,7 @@ fn void input_queue_reset(InputState* input) {
 
 // update held and edges for action
 //-----------------------------------------------------------------------------
-fn void input_action_event(InputState* input, InputEvent evt) {
+fn void InputState.action_event(InputState* input, InputEvent evt) {
 	//io::printn(evt);
 	InputAction action = evt.action;
 	bool was_held = input.held[action];
@@ -112,11 +123,11 @@ fn void input_action_event(InputState* input, InputEvent evt) {
 
 // update the state of input actions
 //-----------------------------------------------------------------------------
-fn void input_process(InputState* input) {
-	input_clear_edges(input);
+fn void InputState.process(InputState* input) {
+	input.clear_edges();
 
 	if (input.queue.overflowed) {
-		input_queue_reset(input);
+		input.queue_reset();
 		return;
 	}
 
@@ -124,9 +135,9 @@ fn void input_process(InputState* input) {
 		InputEvent evt = input.queue.events[i];
 		switch (evt.kind) {
 			case FOCUS_LOST:
-				input_clear_held_and_edges(input);
+				input.clear_held_and_edges();
 			case ACTION:
-				input_action_event(input, evt);
+				input.action_event(evt);
 		}
 	}
 
@@ -136,20 +147,20 @@ fn void input_process(InputState* input) {
 
 // check if an action is held
 //-----------------------------------------------------------------------------
-fn bool input_is_held(InputState* input, InputAction action) {
+fn bool InputState.is_held(InputState* input, InputAction action) {
 	return input.held[action];
 }
 
 
 // check if an action was pressed
 //-----------------------------------------------------------------------------
-fn bool input_was_pressed(InputState* input, InputAction action) {
+fn bool InputState.was_pressed(InputState* input, InputAction action) {
 	return input.pressed[action];
 }
 
 
 // check if an action was released
 //-----------------------------------------------------------------------------
-fn bool input_was_released(InputState* input, InputAction action) {
+fn bool InputState.was_released(InputState* input, InputAction action) {
 	return input.released[action];
 }

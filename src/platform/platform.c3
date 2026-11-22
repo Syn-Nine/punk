@@ -31,7 +31,7 @@ struct Platform {
 
 // init the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void? platform_init(Platform* platform) {
+fn void? Platform.init(Platform* platform) {
 	diagnostics_print(INFO, "Initializing Desktop Platform");
 
 	*platform = {};
@@ -60,7 +60,7 @@ fn void? platform_init(Platform* platform) {
 
 // shutdown the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void platform_shutdown(Platform* platform) {
+fn void Platform.shutdown(Platform* platform) {
 	diagnostics_print(INFO, "Shutting Down Desktop Platform");
 
 	sdl3::destroyRenderer(platform.renderer);
@@ -83,20 +83,27 @@ fn void? platform_load_cart(Cart* cart, String path) {
 }
 
 
-// platform state that must be initialized on the first game frame
-//-----------------------------------------------------------------------------
-fn void platform_first_frame(Platform* platform) {
-	platform.prev_ticks = (long)sdl3::getTicksNS();
-}
-
-
 // number of nanoseconds passed since last call
 //-----------------------------------------------------------------------------
-fn long platform_delta_ticks_ns(Platform* platform) {
+fn long Platform.delta_ticks_ns(Platform* platform) {
 	long prev = platform.prev_ticks;
 	long now = (long)sdl3::getTicksNS();
 	platform.prev_ticks = now;
 	return now - prev;
+}
+
+
+// platform state that must be initialized on the first game frame
+//-----------------------------------------------------------------------------
+fn void Platform.first_frame(Platform* platform) {
+	platform.prev_ticks = (long)sdl3::getTicksNS();
+}
+
+
+// draw framebuffer
+//-----------------------------------------------------------------------------
+fn void Platform.present(Platform* platform) {
+	
 }
 
 
