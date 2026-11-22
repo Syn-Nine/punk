@@ -21,6 +21,7 @@ const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire 
 struct Platform {
 	SdlWindow* window;
 	SdlRenderer* renderer;
+	SdlTexture* framebuffer;
 	long prev_ticks;
 }
 
@@ -53,8 +54,9 @@ fn void? Platform.init(Platform* platform) {
 	sdl3::setWindowPosition(platform.window, (int)sdl3::windowpos_centered(), (int)sdl3::windowpos_centered());
 	sdl3::setRenderLogicalPresentation(platform.renderer, 320, 180, LETTERBOX);
 	sdl3::setRenderVSync(platform.renderer, (SdlRendererVSync)1);
-	
 
+	platform.framebuffer = sdl3::createTexture(platform.renderer, RGBA8888, TARGET, 320, 180);
+	sdl3::setTextureScaleMode(platform.framebuffer, NEAREST);
 }
 
 
@@ -93,6 +95,36 @@ fn long Platform.delta_ticks_ns(Platform* platform) {
 }
 
 
+// convert graphics queue into native drawing commands
+//-----------------------------------------------------------------------------
+fn void Platform.draw(Platform* platform, Graphics* graphics) {
+	if (graphics.queue.failed || graphics.queue.length == 0) return;
+	if (graphics.queue.commands[0].kind != BEGIN_PASS) return;
+	
+	SdlRenderer* renderer = platform.renderer;
+	DrawQueue* q = &graphics.queue;
+	for (sz i = 0; i < graphics.queue.length; i++) {
+		DrawCmd* cmd = &q.commands[i];
+		switch (cmd.kind) {
+			case BEGIN_PASS:
+				if (cmd.data.pass.target == (TargetId)0) {
+					sdl3::setRenderTarget(renderer, platform.framebuffer);
+					if (cmd.data.pass.load == CLEAR) {
+						platform.set_draw_color(cmd.data.pass.color);
+						sdl3::renderClear(renderer);
+					}
+				}
+			case LINE:
+				LineCmd* data = &cmd.data.line;
+				platform.set_draw_color(cmd.data.line.color);
+				sdl3::renderLine(renderer, data.from.x, data.from.y, data.to.x, data.to.y);
+
+			default: break;
+		}
+	}
+}
+
+
 // platform state that must be initialized on the first game frame
 //-----------------------------------------------------------------------------
 fn void Platform.first_frame(Platform* platform) {
@@ -103,7 +135,11 @@ fn void Platform.first_frame(Platform* platform) {
 // draw framebuffer
 //-----------------------------------------------------------------------------
 fn void Platform.present(Platform* platform) {
-	
+	SdlRenderer* renderer = platform.renderer;
+	sdl3::setRenderTarget(renderer, null);
+	SdlFRect rect = { 0, 0, 320, 180 };
+	sdl3::renderTexture(renderer, platform.framebuffer, null, &rect);
+	sdl3::renderPresent(renderer);
 }
 
 
@@ -133,4 +169,12 @@ fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
 	if (catch err = buf) return IO_ERROR~;
 	
 	output.bytes = buf;
+}
+
+
+// set SDL drawing color to mapped punk palette color
+//-----------------------------------------------------------------------------
+fn void Platform.set_draw_color(Platform* platform, Color color) {
+	Palette pal = (Palette)(color % 64);
+	sdl3::setRenderDrawColor(platform.renderer, pal.r, pal.g, pal.b, pal.a);
 }

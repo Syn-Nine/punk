@@ -49,6 +49,8 @@ fn SdlAppResult sdl_app_iter(void* appstate) {
 
 	if (catch err = session.game.frame()) return FAILURE;
 	
+	session.platform.present();
+	
 	return CONTINUE;
 }
 

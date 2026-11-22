@@ -64,7 +64,7 @@ fn void? Game.frame(Game* game) {
 		game.first_frame = false;
 	}
 	long delta_ns = game.platform.delta_ticks_ns();
-
+	
 	// determine how many simulation steps to perform
 	sz steps = game.clock.advance(delta_ns);
 	
@@ -77,7 +77,6 @@ fn void? Game.frame(Game* game) {
 	}
 
 	game.dispatch_draw()!;
-	game.platform.present();
 }
 
 
@@ -101,12 +100,12 @@ fn void? Game.dispatch_draw(Game* game) {
 	Graphics* graphics = &game.graphics;
 	graphics.begin_frame();
 	
-	if (graphics.begin_pass((TargetId)0, PRESERVE, 0)) {
-
+	if (graphics.begin_pass((TargetId)0, CLEAR, (Color)Palette.BLACK)) {
+		graphics.draw_line(319.0, 0.0, 0.0, 179.0, (Color)Palette.RED);
 	}
 	graphics.end_pass();
-	
-	graphics.end_frame();
+	game.platform.draw(graphics);
+
 }
 
 
