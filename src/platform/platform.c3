@@ -21,7 +21,7 @@ const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire 
 struct Platform {
 	SdlWindow* window;
 	SdlRenderer* renderer;
-	ulong prev_ticks;
+	long prev_ticks;
 }
 
 
@@ -72,20 +72,37 @@ fn void platform_shutdown(Platform* platform) {
 
 // load game cart
 //-----------------------------------------------------------------------------
-fn void? load_cart(Cart* cart, String path) {
+fn void? platform_load_cart(Cart* cart, String path) {
 	diagnostics_print(INFO, "Loading Game Cart");
 	
 	// read game code bytes from disk
-	read_file(path, &cart.file_bytes)!;	
+	platform_read_file(path, &cart.file_bytes)!;	
 
 	// compile game code
 
 }
 
 
+// platform state that must be initialized on the first game frame
+//-----------------------------------------------------------------------------
+fn void platform_first_frame(Platform* platform) {
+	platform.prev_ticks = (long)sdl3::getTicksNS();
+}
+
+
+// number of nanoseconds passed since last call
+//-----------------------------------------------------------------------------
+fn long platform_delta_ticks_ns(Platform* platform) {
+	long prev = platform.prev_ticks;
+	long now = (long)sdl3::getTicksNS();
+	platform.prev_ticks = now;
+	return now - prev;
+}
+
+
 // read file bytes
 //-----------------------------------------------------------------------------
-fn void? read_file(String path, ByteBuffer* output) => @pool() {
+fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
 	diagnostics_print(INFO, "Reading File: ".concat(tmem, path));
 	*output = {};
 

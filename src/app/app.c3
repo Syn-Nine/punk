@@ -113,7 +113,7 @@ fn void? session_init(Session* session, int argc, ZString* argv) {
 	platform_init(&session.platform)!;
 
 	String path = "./examples/game.punk";
-	load_cart(&session.cart, path)!;
+	platform_load_cart(&session.cart, path)!;
 
 	game_launch(&session.game, &session.cart, &session.platform)!;
 
