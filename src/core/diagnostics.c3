@@ -9,8 +9,8 @@ import std::io;
 //-----------------------------------------------------------------------------
 
 enum Severity : int (String label) {
-	INFO	{ "INFO" },
-	ERROR	{ "ERROR" },
+    INFO    { "INFO" },
+    ERROR	{ "ERROR" },
 }
 
 
@@ -21,5 +21,5 @@ enum Severity : int (String label) {
 // print diagnostic message to console
 //-----------------------------------------------------------------------------
 fn void diagnostics_print(Severity severity, String message) {
-	io::printfn("[%s] %s", severity.label, message);
+    io::printfn("[%s] %s", severity.label, message);
 }
