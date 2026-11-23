@@ -52,8 +52,9 @@ struct SpriteCmd {
     TextureId texture;
     Rect src;
     Rect dst;
-    Color tint;
+    Color color;
     char opacity;
+    bool simple;
 }
 
 struct TextCmd {
@@ -85,7 +86,7 @@ struct RectCmd {
     char opacity;
 }
 
-union DrawPayload {
+union DrawData {
     BeginPassCmd pass;
     ClearCmd clear;
     SpriteCmd sprite;
@@ -97,7 +98,7 @@ union DrawPayload {
 
 struct DrawCmd {
     DrawKind kind;
-    DrawPayload data;
+    DrawData data;
 }
 
 struct DrawQueue {
@@ -232,7 +233,7 @@ fn void Graphics.draw_rect(Graphics* self, float x, float y, float w, float h, C
 
 // command text drawing
 //-----------------------------------------------------------------------------
-fn void Graphics.draw_text(Graphics* self, sz addr, sz length, float x, float y, Color color, char opacity = 255) {
+fn void Graphics.draw_text(Graphics* self, sz addr, sz length, float x, float y, Color color = 7, char opacity = 255) {
     DrawQueue* q = &self.queue;
     DrawCmd cmd = {
         .kind = TEXT,
@@ -242,6 +243,26 @@ fn void Graphics.draw_text(Graphics* self, sz addr, sz length, float x, float y,
                 .addr = addr,
                 .length = length,
                 .pos = { x, y },
+                .color = color,
+                .opacity = opacity
+            }
+        }
+    };
+    q.draw(cmd);
+}
+
+
+// command sprite drawing
+//-----------------------------------------------------------------------------
+fn void Graphics.draw_sprite(Graphics* self, TextureId texture, float x, float y, Color color = 7, char opacity = 255) {
+    DrawQueue* q = &self.queue;
+    DrawCmd cmd = {
+        .kind = SPRITE,
+        .data = {
+            .sprite = {
+                .simple = true,
+                .dst = { .x = x, .y = y },
+                .texture = texture,
                 .color = color,
                 .opacity = opacity
             }

@@ -5,6 +5,16 @@ module punk;
 import std::io;
 import sdl3;
 
+
+//-----------------------------------------------------------------------------
+// ENUMERATIONS
+//-----------------------------------------------------------------------------
+
+enum RscKind : char {
+    TEXTURE,
+}
+
+
 //-----------------------------------------------------------------------------
 // CONSTANTS
 //-----------------------------------------------------------------------------
@@ -12,24 +22,56 @@ import sdl3;
 const sz MAX_SCRIPT_BYTES = 64 * 1024; // 64KiB package code size limit
 const sz MAX_FILE_BYTES = 1024 * 1024; // 1MiB size limit for any file
 const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire package zip
-
+const sz MAX_RESOURCE_COUNT = 1024;
 
 //-----------------------------------------------------------------------------
 // STRUCTURES
 //-----------------------------------------------------------------------------
 
+struct RscTexture {
+    SdlTexture* ptr;
+    int width;
+    int height;
+}
+
+union RscData {
+    RscTexture texture;
+}
+
+struct Resource {
+    RscKind kind;
+    RscData data;
+}
+
+struct Resources {
+    Resource[] db;
+    int count;
+}
+
 struct Platform {
     SdlWindow* window;
     SdlRenderer* renderer;
     SdlTexture* framebuffer;
+    Resources resources;
     Fonts fonts;
     long prev_ticks;
 }
 
 
+
 //-----------------------------------------------------------------------------
 // FUNCTIONS
 //-----------------------------------------------------------------------------
+
+// push resource into database
+//-----------------------------------------------------------------------------
+fn int? Resources.push(Resources* self, Resource rsc) {
+    if (self.count >= MAX_RESOURCE_COUNT) return RSC_ERROR~;
+    self.db[self.count] = rsc;
+    self.count++;
+    return self.count - 1;
+}
+
 
 // init the desktop platform layer
 //-----------------------------------------------------------------------------
@@ -69,6 +111,20 @@ fn void Platform.shutdown(Platform* self) {
     diagnostics_print(INFO, "Shutting Down Desktop Platform");
 
     self.fonts.shutdown();
+
+    for (sz i = 0; i < self.resources.count; i++) {
+        Resource* rsc = &self.resources.db[i];
+        switch (rsc.kind) {
+            case TEXTURE:
+                if (rsc.data.texture.ptr != null) {
+                    sdl3::destroyTexture(rsc.data.texture.ptr);
+                    rsc.data.texture.ptr = null;
+                }
+            
+            default: break;
+        }
+    }
+
     sdl3::destroyRenderer(self.renderer);
     sdl3::destroyWindow(self.window);
     
@@ -86,6 +142,34 @@ fn void? platform_load_cart(Cart* cart, String path) {
 
     // compile game code
 
+}
+
+
+// load image
+//-----------------------------------------------------------------------------
+fn int? Platform.load_png(Platform* self, String path) => @pool() {
+    diagnostics_print(INFO, string::tformat("Loading PNG: \"%s\"", path));
+    
+    SdlSurface* surf = sdl3::loadPNG(path);
+    if (surf == null) return IO_ERROR~;
+    defer sdl3::destroySurface(surf);
+
+    SdlTexture* tex = sdl3::createTextureFromSurface(self.renderer, surf);
+    if (tex == null) return SDL_ERROR~;
+
+    Resource rsc = {
+        .kind = TEXTURE,
+        .data = {
+            .texture = {
+                .ptr = tex,
+                .width = surf.w,
+                .height = surf.h
+            }
+        }
+    };
+    
+    int id = self.resources.push(rsc)!;
+    return id;
 }
 
 
@@ -137,6 +221,16 @@ fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
                 SdlFRect rect = { data.bounds.x, data.bounds.y, data.bounds.w, data.bounds.h };
                 sdl3::renderFillRect(renderer, &rect);
 
+            case SPRITE:
+                SpriteCmd* data = &cmd.data.sprite;
+                if (data.texture < 0 || data.texture >= MAX_RESOURCE_COUNT) continue;
+                Palette pal = (Palette)(data.color % 64);
+                char alpha = pal.a;
+                if (data.opacity < 255) alpha = data.opacity;
+                Resource* rsc = &self.resources.db[(int)data.texture];
+                if (rsc.kind != TEXTURE) continue;
+                self.draw_sprite_simple(&rsc.data.texture, data.dst.x, data.dst.y, pal.r, pal.g, pal.b, alpha);
+
             case TEXT:
                 TextCmd* data = &cmd.data.text;
                 Palette pal = (Palette)(data.color % 64);
@@ -149,6 +243,17 @@ fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
     }
 }
 
+fn void Platform.draw_sprite_simple(Platform* self, RscTexture* tex, float x, float y, char r, char g, char b, char a) {
+    if (tex.ptr == null ||
+        !sdl3::setTextureColorMod(tex.ptr, r, g, b) ||
+        !sdl3::setTextureAlphaMod(tex.ptr, a))
+    {
+        return;
+    }
+
+    SdlFRect dst = { x, y, tex.width, tex.height };
+    sdl3::renderTexture(self.renderer, tex.ptr, null, &dst);
+}
 
 // platform state that must be initialized on the first game frame
 //-----------------------------------------------------------------------------
@@ -172,13 +277,13 @@ fn void Platform.present(Platform* self) {
 // read file bytes
 //-----------------------------------------------------------------------------
 fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
-    diagnostics_print(INFO, "Reading File: ".concat(tmem, path));
+    diagnostics_print(INFO, string::tformat("Reading File: \"%s\"", path));
     *output = {};
 
     // check if file exists
     File? fp = file::open(path, "rb");
     if (catch err = fp) {
-        diagnostics_print(ERROR, "Failed to read file: ".concat(tmem, path));
+        diagnostics_print(ERROR, string::tformat("Failed to read file: \"%s\"", path));
         return IO_ERROR~;
     }
     defer fp.close();

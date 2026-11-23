@@ -48,6 +48,7 @@ fn void? Game.launch(Game* self, Cart* cart, Platform* platform) {
     };
     self.scratch.bytes = mem::new_array(char, MAX_SCRATCH_BYTES);
     self.graphics.queue.commands = mem::new_array(DrawCmd, MAX_DRAW_QUEUE_SIZE);
+    self.platform.resources.db = mem::new_array(Resource, MAX_RESOURCE_COUNT);
 }
 
 
@@ -57,6 +58,8 @@ fn void? Game.frame(Game* self) {
     if (self.first_frame) {
         self.platform.first_frame();
         self.first_frame = false;
+        self.dispatch_globals()!;
+        self.dispatch_init()!;
     }
     long delta_ns = self.platform.delta_ticks_ns();
     
@@ -80,8 +83,25 @@ fn void? Game.frame(Game* self) {
 fn void Game.shutdown(Game* self) {
     diagnostics_print(INFO, "Shutting Down Game");
     byte_buffer_release(&self.cart.file_bytes);
+    free(self.scratch.bytes);
+    free(self.graphics.queue.commands);
+    free(self.platform.resources.db);
 }
 
+
+
+// run game global code block
+//-----------------------------------------------------------------------------
+fn void? Game.dispatch_globals(Game* self) {
+    int id = self.platform.load_png("./examples/sprites.png")!;
+}
+
+
+// run game init code block
+//-----------------------------------------------------------------------------
+fn void? Game.dispatch_init(Game* self) {
+
+}
 
 
 // run game on-event blocks
@@ -119,13 +139,15 @@ fn void? Game.dispatch_draw(Game* self) => @pool() {
                 text = string::tformat("%d", c);
                 addr = self.scratch.clone_text(text);
                 length = text.len;
-                if (x < 4) {
+                if (x < 4 || c == 63) {
                     graphics.draw_text(addr, length, x0, y0, (Color)Palette.WHITE);
                 } else {
                     graphics.draw_text(addr, length, x0, y0, (Color)Palette.BLACK);
                 }
             }
         }
+
+        graphics.draw_sprite((TextureId)0, 0.0, 148.0);
     }
     graphics.end_pass();
     self.platform.draw(graphics, &self.scratch);
