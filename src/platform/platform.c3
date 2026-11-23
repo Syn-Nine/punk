@@ -22,6 +22,7 @@ struct Platform {
     SdlWindow* window;
     SdlRenderer* renderer;
     SdlTexture* framebuffer;
+    Fonts fonts;
     long prev_ticks;
 }
 
@@ -32,10 +33,10 @@ struct Platform {
 
 // init the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void? Platform.init(Platform* platform) {
+fn void? Platform.init(Platform* self) {
     diagnostics_print(INFO, "Initializing Desktop Platform");
 
-    *platform = {};
+    *self = {};
     
     if (!sdl3::init({ .video = true })) {
         diagnostics_print(ERROR, string::tformat("Failed to initialize SDL: %s", sdl3::getError()));
@@ -43,32 +44,35 @@ fn void? Platform.init(Platform* platform) {
     }
 
     if (!sdl3::createWindowAndRenderer(
-        "examples/demo/snake",
+        "Punk Engine Demo",
         320 * 4,
         180 * 4,
         { .resizable = true },
-        &platform.window,
-        &platform.renderer
+        &self.window,
+        &self.renderer
     )) return SDL_ERROR~;
 
-    sdl3::setWindowPosition(platform.window, (int)sdl3::windowpos_centered(), (int)sdl3::windowpos_centered());
-    sdl3::setRenderLogicalPresentation(platform.renderer, 320, 180, LETTERBOX);
-    sdl3::setRenderVSync(platform.renderer, (SdlRendererVSync)1);
+    sdl3::setWindowPosition(self.window, (int)sdl3::windowpos_centered(), (int)sdl3::windowpos_centered());
+    sdl3::setRenderLogicalPresentation(self.renderer, 320, 180, LETTERBOX);
+    sdl3::setRenderVSync(self.renderer, (SdlRendererVSync)1);
 
-    platform.framebuffer = sdl3::createTexture(platform.renderer, RGBA8888, TARGET, 320, 180);
-    sdl3::setTextureScaleMode(platform.framebuffer, NEAREST);
+    self.framebuffer = sdl3::createTexture(self.renderer, RGBA8888, TARGET, 320, 180);
+    sdl3::setTextureScaleMode(self.framebuffer, NEAREST);
+
+    self.fonts.init(self.renderer, tamzen16_fnt[..])!;
 }
 
 
 // shutdown the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void Platform.shutdown(Platform* platform) {
+fn void Platform.shutdown(Platform* self) {
     diagnostics_print(INFO, "Shutting Down Desktop Platform");
 
-    sdl3::destroyRenderer(platform.renderer);
-    sdl3::destroyWindow(platform.window);
+    self.fonts.shutdown();
+    sdl3::destroyRenderer(self.renderer);
+    sdl3::destroyWindow(self.window);
     
-    *platform = {};
+    *self = {};
 }
 
 
@@ -87,51 +91,58 @@ fn void? platform_load_cart(Cart* cart, String path) {
 
 // number of nanoseconds passed since last call
 //-----------------------------------------------------------------------------
-fn long Platform.delta_ticks_ns(Platform* platform) {
-    long prev = platform.prev_ticks;
+fn long Platform.delta_ticks_ns(Platform* self) {
+    long prev = self.prev_ticks;
     long now = (long)sdl3::getTicksNS();
-    platform.prev_ticks = now;
+    self.prev_ticks = now;
     return now - prev;
 }
 
 
 // convert graphics queue into native drawing commands
 //-----------------------------------------------------------------------------
-fn void Platform.draw(Platform* platform, Graphics* graphics) {
+fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
     if (graphics.queue.failed || graphics.queue.length == 0) return;
     if (graphics.queue.commands[0].kind != BEGIN_PASS) return;
     
-    SdlRenderer* renderer = platform.renderer;
+    SdlRenderer* renderer = self.renderer;
     DrawQueue* q = &graphics.queue;
     for (sz i = 0; i < graphics.queue.length; i++) {
         DrawCmd* cmd = &q.commands[i];
         switch (cmd.kind) {
             case BEGIN_PASS:
                 if (cmd.data.pass.target == (TargetId)0) {
-                    sdl3::setRenderTarget(renderer, platform.framebuffer);
+                    sdl3::setRenderTarget(renderer, self.framebuffer);
                     sdl3::setRenderDrawBlendMode(renderer, BLEND);
 
                     if (cmd.data.pass.load == CLEAR) {
-                        platform.set_draw_color(cmd.data.pass.color, cmd.data.pass.opacity);
-                        sdl3::setRenderDrawColor(platform.renderer, 0, 0, 0, 255);
+                        self.set_draw_color(cmd.data.pass.color, cmd.data.pass.opacity);
+                        sdl3::setRenderDrawColor(self.renderer, 0, 0, 0, 255);
                         sdl3::renderClear(renderer);
                     }
                 }
             case LINE:
                 LineCmd* data = &cmd.data.line;
-                platform.set_draw_color(data.color, data.opacity);
+                self.set_draw_color(data.color, data.opacity);
                 sdl3::renderLine(renderer, data.from.x, data.from.y, data.to.x, data.to.y);
 
             case PIXEL:
                 PixelCmd* data = &cmd.data.pixel;
-                platform.set_draw_color(data.color, data.opacity);
+                self.set_draw_color(data.color, data.opacity);
                 sdl3::renderPoint(renderer, data.pos.x, data.pos.y);
 
             case RECT:
                 RectCmd* data = &cmd.data.rect;
-                platform.set_draw_color(data.color, data.opacity);
+                self.set_draw_color(data.color, data.opacity);
                 SdlFRect rect = { data.bounds.x, data.bounds.y, data.bounds.w, data.bounds.h };
                 sdl3::renderFillRect(renderer, &rect);
+
+            case TEXT:
+                TextCmd* data = &cmd.data.text;
+                Palette pal = (Palette)(data.color % 64);
+                char alpha = pal.a;
+                if (data.opacity < 255) alpha = data.opacity;
+                self.fonts.draw_text_rgba(scratch, data.addr, data.length, data.pos.x, data.pos.y, pal.r, pal.g, pal.b, alpha);
 
             default: break;
         }
@@ -141,19 +152,19 @@ fn void Platform.draw(Platform* platform, Graphics* graphics) {
 
 // platform state that must be initialized on the first game frame
 //-----------------------------------------------------------------------------
-fn void Platform.first_frame(Platform* platform) {
-    platform.prev_ticks = (long)sdl3::getTicksNS();
+fn void Platform.first_frame(Platform* self) {
+    self.prev_ticks = (long)sdl3::getTicksNS();
 }
 
 
 // draw framebuffer
 //-----------------------------------------------------------------------------
-fn void Platform.present(Platform* platform) {
-    SdlRenderer* renderer = platform.renderer;
+fn void Platform.present(Platform* self) {
+    SdlRenderer* renderer = self.renderer;
     sdl3::setRenderTarget(renderer, null);
     sdl3::setRenderDrawBlendMode(renderer, NONE);
     SdlFRect rect = { 0, 0, 320, 180 };
-    sdl3::renderTexture(renderer, platform.framebuffer, null, &rect);
+    sdl3::renderTexture(renderer, self.framebuffer, null, &rect);
     sdl3::renderPresent(renderer);
 }
 
@@ -189,11 +200,11 @@ fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
 
 // set SDL drawing color to mapped punk palette color
 //-----------------------------------------------------------------------------
-fn void Platform.set_draw_color(Platform* platform, Color color, char opacity) {
+fn void Platform.set_draw_color(Platform* self, Color color, char opacity) {
     Palette pal = (Palette)(color % 64);
     if (opacity < 255) {
-        sdl3::setRenderDrawColor(platform.renderer, pal.r, pal.g, pal.b, opacity);
+        sdl3::setRenderDrawColor(self.renderer, pal.r, pal.g, pal.b, opacity);
     } else {
-        sdl3::setRenderDrawColor(platform.renderer, pal.r, pal.g, pal.b, pal.a);
+        sdl3::setRenderDrawColor(self.renderer, pal.r, pal.g, pal.b, pal.a);
     }
 }

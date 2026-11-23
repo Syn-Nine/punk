@@ -61,7 +61,7 @@ struct TextCmd {
     Vec2 pos;
     Color color;
     char opacity;
-    sz scratch_addr;
+    sz addr;
     sz length;
 }
 
@@ -140,16 +140,16 @@ fn bool DrawQueue.push(DrawQueue* q, DrawCmd cmd) {
 
 // setup the command queue
 //-----------------------------------------------------------------------------
-fn void Graphics.begin_frame(Graphics* graphics) {
-    graphics.queue.pass_open = false;
-    graphics.queue.failed = false;
+fn void Graphics.begin_frame(Graphics* self) {
+    self.queue.pass_open = false;
+    self.queue.failed = false;
 }
 
 
 // start a render target pass
 //-----------------------------------------------------------------------------
-fn bool Graphics.begin_pass(Graphics* graphics, TargetId target, LoadOp load, Color color, char opacity = 255) {
-    DrawQueue* q = &graphics.queue;
+fn bool Graphics.begin_pass(Graphics* self, TargetId target, LoadOp load, Color color, char opacity = 255) {
+    DrawQueue* q = &self.queue;
     if (q.pass_open) q.failed = true;
     if (q.failed) return false;
     q.length = 0; // reset queue
@@ -167,8 +167,8 @@ fn bool Graphics.begin_pass(Graphics* graphics, TargetId target, LoadOp load, Co
 
 // end the render target pass
 //-----------------------------------------------------------------------------
-fn void Graphics.end_pass(Graphics* graphics) {
-    DrawQueue* q = &graphics.queue;
+fn void Graphics.end_pass(Graphics* self) {
+    DrawQueue* q = &self.queue;
     q.draw({ .kind = END_PASS });
     q.pass_open = false;
 }
@@ -176,8 +176,8 @@ fn void Graphics.end_pass(Graphics* graphics) {
 
 // command a line
 //-----------------------------------------------------------------------------
-fn void Graphics.draw_line(Graphics* graphics, float x0, float y0, float x1, float y1, Color color, char opacity = 255) {
-    DrawQueue* q = &graphics.queue;
+fn void Graphics.draw_line(Graphics* self, float x0, float y0, float x1, float y1, Color color, char opacity = 255) {
+    DrawQueue* q = &self.queue;
     DrawCmd cmd = {
         .kind = LINE,
         .data = {
@@ -196,8 +196,8 @@ fn void Graphics.draw_line(Graphics* graphics, float x0, float y0, float x1, flo
 
 // command a pixel
 //-----------------------------------------------------------------------------
-fn void Graphics.draw_pixel(Graphics* graphics, float x, float y, Color color, char opacity = 255) {
-    DrawQueue* q = &graphics.queue;
+fn void Graphics.draw_pixel(Graphics* self, float x, float y, Color color, char opacity = 255) {
+    DrawQueue* q = &self.queue;
     DrawCmd cmd = {
         .kind = PIXEL,
         .data = {
@@ -214,8 +214,8 @@ fn void Graphics.draw_pixel(Graphics* graphics, float x, float y, Color color, c
 
 // command a pixel
 //-----------------------------------------------------------------------------
-fn void Graphics.draw_rect(Graphics* graphics, float x, float y, float w, float h, Color color, char opacity = 255) {
-    DrawQueue* q = &graphics.queue;
+fn void Graphics.draw_rect(Graphics* self, float x, float y, float w, float h, Color color, char opacity = 255) {
+    DrawQueue* q = &self.queue;
     DrawCmd cmd = {
         .kind = RECT,
         .data = {
@@ -229,3 +229,23 @@ fn void Graphics.draw_rect(Graphics* graphics, float x, float y, float w, float 
     q.draw(cmd);
 }
 
+
+// command text drawing
+//-----------------------------------------------------------------------------
+fn void Graphics.draw_text(Graphics* self, sz addr, sz length, float x, float y, Color color, char opacity = 255) {
+    DrawQueue* q = &self.queue;
+    DrawCmd cmd = {
+        .kind = TEXT,
+        .data = {
+            .text = {
+                .font = 0,
+                .addr = addr,
+                .length = length,
+                .pos = { x, y },
+                .color = color,
+                .opacity = opacity
+            }
+        }
+    };
+    q.draw(cmd);
+}

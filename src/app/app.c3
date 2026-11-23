@@ -109,16 +109,16 @@ fn void sdl_app_quit(void* appstate, SdlAppResult result) {
 
 // initialize the desktop game session and launch the game
 //-----------------------------------------------------------------------------
-fn void? Session.init(Session* session, int argc, ZString* argv) {
+fn void? Session.init(Session* self, int argc, ZString* argv) {
     diagnostics_print(INFO, "Initializing Session");
     
-    *session = {};
-    session.platform.init()!;
+    *self = {};
+    self.platform.init()!;
 
     String path = "./examples/game.punk";
-    platform_load_cart(&session.cart, path)!;
+    platform_load_cart(&self.cart, path)!;
 
-    session.game.launch(&session.cart, &session.platform)!;
+    self.game.launch(&self.cart, &self.platform)!;
 
     // platform
 }
@@ -126,11 +126,11 @@ fn void? Session.init(Session* session, int argc, ZString* argv) {
 
 // shutdown the desktop game session
 //-----------------------------------------------------------------------------
-fn void Session.shutdown(Session* session) {
+fn void Session.shutdown(Session* self) {
     diagnostics_print(INFO, "Shutting Down Punk Desktop");
     
     // free resources
-    session.game.shutdown();
-    session.platform.shutdown();
+    self.game.shutdown();
+    self.platform.shutdown();
 }
 

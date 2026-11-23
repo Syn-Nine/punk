@@ -5,7 +5,7 @@ module punk;
 import std::io;
 
 
-excuse SDL_ERROR, IO_ERROR;
+excuse SDL_ERROR, IO_ERROR, FONT_ERROR;
 
 
 //-----------------------------------------------------------------------------

@@ -28,11 +28,11 @@ struct GameClock {
 
 // move the clock accumulator forward and return number of steps to simulate
 //-----------------------------------------------------------------------------
-fn long GameClock.advance(GameClock* clock, long delta_ns) {
+fn long GameClock.advance(GameClock* self, long delta_ns) {
     if (delta_ns < 1) return 0;
-    clock.accumulator_ns += min(delta_ns, MAX_DELTA_NS);
-    long steps = whole_steps(clock.accumulator_ns, CLOCK_STEP_NS);
-    clock.accumulator_ns -= steps * CLOCK_STEP_NS;
+    self.accumulator_ns += min(delta_ns, MAX_DELTA_NS);
+    long steps = whole_steps(self.accumulator_ns, CLOCK_STEP_NS);
+    self.accumulator_ns -= steps * CLOCK_STEP_NS;
     return steps > MAX_CATCH_UP ? MAX_CATCH_UP : steps;
 }
 
