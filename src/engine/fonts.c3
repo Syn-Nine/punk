@@ -47,7 +47,7 @@ fn void? Fonts.init(Fonts* self, SdlRenderer* renderer, int[] data) {
         return FONT_ERROR~;
     }
 
-	*self = { .renderer = renderer, .height = height };
+    *self = { .renderer = renderer, .height = height };
     
     for (int i = 0; i < glyph_count; i++) {
         int offset = 4 + i * 8;
@@ -74,12 +74,12 @@ fn void? Fonts.init(Fonts* self, SdlRenderer* renderer, int[] data) {
 
     char* pixels = (char*)surface.pixels;
     for (int row = 0; row < image_height; row++) {
-        char* dst = pixels + (sz)row * surface.pitch;
-        sz src = pixel_start + (sz)row * image_width;
+        char* dst = pixels + row * surface.pitch;
+        int src = pixel_start + row * image_width;
 
         for (int col = 0; col < image_width; col++) {
             char value = (char)data[src + col];
-            sz channel = (sz)col * 4;
+            int channel = col * 4;
             dst[channel + 0] = value;
             dst[channel + 1] = value;
             dst[channel + 2] = value;
@@ -109,25 +109,25 @@ fn void Fonts.shutdown(Fonts* self) {
 
 
 //-----------------------------------------------------------------------------
-fn bool Fonts.draw_text(Fonts* self, Scratch* scratch, sz addr, sz length, float x, float y) {
+fn bool Fonts.draw_text(Fonts* self, Scratch* scratch, int addr, int length, float x, float y) {
     return self.draw_text_rgba(scratch, addr, length, x, y, 255, 255, 255, 255);
 }
 
 
 //-----------------------------------------------------------------------------
-fn bool Fonts.draw_text_rgba(Fonts* self, Scratch* scratch, sz addr, sz length, float x, float y, char r, char g, char b, char a)
+fn bool Fonts.draw_text_rgba(Fonts* self, Scratch* scratch, int addr, int length, float x, float y, char r, char g, char b, char a)
 {
     if (self.texture == null ||
-		!sdl3::setTextureColorMod(self.texture, r, g, b) ||
-		!sdl3::setTextureAlphaMod(self.texture, a))
-	{
+        !sdl3::setTextureColorMod(self.texture, r, g, b) ||
+        !sdl3::setTextureAlphaMod(self.texture, a))
+    {
         return false;
     }
 
     float start_x = x;
 
-	for (sz i = 0; i < length; i++) {
-		char ch = scratch.bytes[addr + i];
+    for (int i = 0; i < length; i++) {
+        char ch = scratch.bytes[addr + i];
         if (ch == '\n') {
             x = start_x;
             y += (float)self.height;

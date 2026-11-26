@@ -24,6 +24,7 @@ struct Cart {
 struct Game {
     Cart* cart;
     Platform* platform;
+    Diagnostics* diagnostics;
     InputState input;
     GameClock clock;
     Graphics graphics;
@@ -40,7 +41,8 @@ struct Game {
 // launch the compiled game
 //-----------------------------------------------------------------------------
 fn void? Game.launch(Game* self, Cart* cart, Platform* platform) {
-    diagnostics_print(INFO, "Launching Game");
+    self.diagnostics = platform.diagnostics;
+    self.diagnostics.info("Launching Game");
     *self = {
         .cart = cart,
         .platform = platform,
@@ -64,10 +66,10 @@ fn void? Game.frame(Game* self) {
     long delta_ns = self.platform.delta_ticks_ns();
     
     // determine how many simulation steps to perform
-    sz steps = self.clock.advance(delta_ns);
+    int steps = self.clock.advance(delta_ns);
     
     // for each step, process the input event queue, dispatch events
-    for (sz step = 0; step < steps; step++) {
+    for (int step = 0; step < steps; step++) {
         self.input.process();
         self.dispatch_bindings()!;
         self.dispatch_update()!;
@@ -81,8 +83,7 @@ fn void? Game.frame(Game* self) {
 // release the game resources
 //-----------------------------------------------------------------------------
 fn void Game.shutdown(Game* self) {
-    diagnostics_print(INFO, "Shutting Down Game");
-    byte_buffer_release(&self.cart.file_bytes);
+    self.diagnostics.info("Shutting Down Game");
     free(self.scratch.bytes);
     free(self.graphics.queue.commands);
     free(self.platform.resources.db);
@@ -126,12 +127,12 @@ fn void? Game.dispatch_draw(Game* self) => @pool() {
         graphics.draw_rect(30.0, 70.0, 30.0, 40.0, (Color)Palette.BRICK, 192);
         
         String text = "test2";
-        sz addr = self.scratch.clone_text(text);
-        sz length = text.len;
+        int addr = self.scratch.clone_text(text);
+        int length = text.len;
         graphics.draw_text(addr, length, 0.0, 0.0, (Color)Palette.MINT, 192);
 
-        for (sz y = 0; y < 8; y++) {
-            for (sz x = 0; x < 8; x++) {
+        for (int y = 0; y < 8; y++) {
+            for (int x = 0; x < 8; x++) {
                 Color c = (char)(y * 8 + x);
                 float x0 = (float)(100 + x * 16);
                 float y0 = (float)(10 + y * 16);

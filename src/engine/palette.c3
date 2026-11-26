@@ -5,7 +5,7 @@ module punk;
 
 enum Palette : char (char r, char g, char b, char a) {
     BLACK         { 0, 0, 0, 255 },
-    CHARCOAL	  { 36, 36, 36, 255 },
+    CHARCOAL      { 36, 36, 36, 255 },
     ASH           { 53, 52, 45, 255 },
     GRAY          { 109, 109, 109, 255 },
     MID_GRAY      { 146, 146, 146, 255 },

@@ -9,20 +9,20 @@ module punk;
 
 struct Scratch {
     char[] bytes;
-    sz cursor;
+    int cursor;
 }
 
 
 //-----------------------------------------------------------------------------
-fn sz Scratch.clone_text(Scratch* self, String text) {
-	sz length = text.len;
-	if (self.cursor >= MAX_SCRATCH_BYTES - length) self.cursor = 0;
-	sz addr = self.cursor;
-	for (sz i = 0; i < length; i++) {
-		self.bytes[addr + i] = text[i];
-	}
-	self.cursor += length;
-	return addr;
+fn int Scratch.clone_text(Scratch* self, String text) {
+    int length = text.len;
+    if (self.cursor >= MAX_SCRATCH_BYTES - length) self.cursor = 0;
+    int addr = self.cursor;
+    for (int i = 0; i < length; i++) {
+        self.bytes[addr + i] = text[i];
+    }
+    self.cursor += length;
+    return addr;
 }
 
 

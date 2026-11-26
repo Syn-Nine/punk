@@ -62,8 +62,8 @@ struct TextCmd {
     Vec2 pos;
     Color color;
     char opacity;
-    sz addr;
-    sz length;
+    int addr;
+    int length;
 }
 
 struct LineCmd {
@@ -103,7 +103,7 @@ struct DrawCmd {
 
 struct DrawQueue {
     DrawCmd[] commands;
-    sz length;
+    int length;
     bool pass_open;
     bool failed;
 }
@@ -233,7 +233,7 @@ fn void Graphics.draw_rect(Graphics* self, float x, float y, float w, float h, C
 
 // command text drawing
 //-----------------------------------------------------------------------------
-fn void Graphics.draw_text(Graphics* self, sz addr, sz length, float x, float y, Color color = 7, char opacity = 255) {
+fn void Graphics.draw_text(Graphics* self, int addr, int length, float x, float y, Color color = 7, char opacity = 255) {
     DrawQueue* q = &self.queue;
     DrawCmd cmd = {
         .kind = TEXT,

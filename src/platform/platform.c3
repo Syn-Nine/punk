@@ -19,10 +19,10 @@ enum RscKind : char {
 // CONSTANTS
 //-----------------------------------------------------------------------------
 
-const sz MAX_SCRIPT_BYTES = 64 * 1024; // 64KiB package code size limit
-const sz MAX_FILE_BYTES = 1024 * 1024; // 1MiB size limit for any file
-const sz MAX_PACKAGE_ZIP_BYTES = 2 * 1024 * 1024; // 2MiB size limit for entire package zip
-const sz MAX_RESOURCE_COUNT = 1024;
+const int MAX_SCRIPT_BYTES = 256 * 1024; // 256KiB package code size limit
+const int MAX_FILE_BYTES = 1024 * 1024; // 1MiB size limit for any file
+const int MAX_PACKAGE_ZIP_BYTES = 64 * 1024 * 1024; // 64MiB size limit for entire package zip
+const int MAX_RESOURCE_COUNT = 1024;
 
 //-----------------------------------------------------------------------------
 // STRUCTURES
@@ -52,6 +52,7 @@ struct Platform {
     SdlWindow* window;
     SdlRenderer* renderer;
     SdlTexture* framebuffer;
+    Diagnostics* diagnostics;
     Resources resources;
     Fonts fonts;
     long prev_ticks;
@@ -75,13 +76,12 @@ fn int? Resources.push(Resources* self, Resource rsc) {
 
 // init the desktop platform layer
 //-----------------------------------------------------------------------------
-fn void? Platform.init(Platform* self) {
-    diagnostics_print(INFO, "Initializing Desktop Platform");
-
-    *self = {};
+fn void? Platform.init(Platform* self, Diagnostics* diagnostics) {
+    self.diagnostics = diagnostics;
+    self.diagnostics.info("Initializing Desktop Platform");
     
     if (!sdl3::init({ .video = true })) {
-        diagnostics_print(ERROR, string::tformat("Failed to initialize SDL: %s", sdl3::getError()));
+        self.diagnostics.report_platform_failed_to_init_sdl(sdl3::getError());
         return SDL_ERROR~;
     }
 
@@ -108,11 +108,11 @@ fn void? Platform.init(Platform* self) {
 // shutdown the desktop platform layer
 //-----------------------------------------------------------------------------
 fn void Platform.shutdown(Platform* self) {
-    diagnostics_print(INFO, "Shutting Down Desktop Platform");
+    self.diagnostics.info("Shutting Down Desktop Platform");
 
     self.fonts.shutdown();
 
-    for (sz i = 0; i < self.resources.count; i++) {
+    for (int i = 0; i < self.resources.count; i++) {
         Resource* rsc = &self.resources.db[i];
         switch (rsc.kind) {
             case TEXTURE:
@@ -134,21 +134,29 @@ fn void Platform.shutdown(Platform* self) {
 
 // load game cart
 //-----------------------------------------------------------------------------
-fn void? platform_load_cart(Cart* cart, String path) {
-    diagnostics_print(INFO, "Loading Game Cart");
+fn void? Platform.load_cart(Platform* self, Cart* cart, String path) {
+    self.diagnostics.info("Loading Game Cart");
     
     // read game code bytes from disk
-    platform_read_file(path, &cart.file_bytes)!;    
+    self.read_file(path, &cart.file_bytes)!;
+    self.diagnostics.file_bytes = &cart.file_bytes;
 
     // compile game code
+    Compiler compiler; defer compiler.destroy();
+    compiler.compile(self.diagnostics, cart.file_bytes)!;
+
+    Vm vm; defer vm.destroy();
+    vm.init(self.diagnostics, compiler.image)!;
+    
+    vm.run()!;
 
 }
 
 
 // load image
 //-----------------------------------------------------------------------------
-fn int? Platform.load_png(Platform* self, String path) => @pool() {
-    diagnostics_print(INFO, string::tformat("Loading PNG: \"%s\"", path));
+fn int? Platform.load_png(Platform* self, String path) {
+    self.diagnostics.info(string::tformat("Loading PNG: \"%s\"", path));
     
     SdlSurface* surf = sdl3::loadPNG(path);
     if (surf == null) return IO_ERROR~;
@@ -191,7 +199,7 @@ fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
     
     SdlRenderer* renderer = self.renderer;
     DrawQueue* q = &graphics.queue;
-    for (sz i = 0; i < graphics.queue.length; i++) {
+    for (int i = 0; i < graphics.queue.length; i++) {
         DrawCmd* cmd = &q.commands[i];
         switch (cmd.kind) {
             case BEGIN_PASS:
@@ -243,6 +251,10 @@ fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
     }
 }
 
+
+
+// sprite drawing helper
+//-----------------------------------------------------------------------------
 fn void Platform.draw_sprite_simple(Platform* self, RscTexture* tex, float x, float y, char r, char g, char b, char a) {
     if (tex.ptr == null ||
         !sdl3::setTextureColorMod(tex.ptr, r, g, b) ||
@@ -276,14 +288,14 @@ fn void Platform.present(Platform* self) {
 
 // read file bytes
 //-----------------------------------------------------------------------------
-fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
-    diagnostics_print(INFO, string::tformat("Reading File: \"%s\"", path));
+fn void? Platform.read_file(Platform* self, String path, ByteBuffer* output) {
+    self.diagnostics.info(string::tformat("Reading File: \"%s\"", path));
     *output = {};
 
     // check if file exists
     File? fp = file::open(path, "rb");
     if (catch err = fp) {
-        diagnostics_print(ERROR, string::tformat("Failed to read file: \"%s\"", path));
+        self.diagnostics.report_platform_failed_to_read_file(path);
         return IO_ERROR~;
     }
     defer fp.close();
@@ -292,7 +304,7 @@ fn void? platform_read_file(String path, ByteBuffer* output) => @pool() {
     if (catch err = size) return IO_ERROR~;
 
     if (size > MAX_SCRIPT_BYTES) {
-        diagnostics_print(ERROR, "Script size limit exceeded");
+        self.diagnostics.report_platform_script_size_limit_exceeded(size, MAX_SCRIPT_BYTES);
         return IO_ERROR~;
     }
 

@@ -3,6 +3,7 @@
 //-----------------------------------------------------------------------------
 module punk;
 import sdl3;
+import std::io;
 
 //-----------------------------------------------------------------------------
 // STRUCTURES
@@ -13,6 +14,8 @@ struct Session {
     Game game;
     Cart cart;
     Platform platform;
+    Diagnostics diagnostics;
+    bool initialized;
 }
 
 
@@ -23,7 +26,6 @@ struct Session {
 // desktop SDL entry
 //-----------------------------------------------------------------------------
 fn int main(String[] argv) {
-    diagnostics_print(INFO, "Launching Punk Desktop");
     return sdl3::enterAppMainCallbacks(argv.len, (ZString*)argv, &sdl_app_init, &sdl_app_iter, &sdl_app_evt, &sdl_app_quit);
 }
 
@@ -34,9 +36,13 @@ fn SdlAppResult sdl_app_init(void** appstate, int argc, ZString* argv) {
     
     Session* session = mem::new(Session);
     *appstate = session;
+    *session = {};
+
+    session.diagnostics.info("Launching Punk Desktop");
     
     // initialize the desktop session and launch the game
     if (catch err = session.init(argc, argv)) return FAILURE;
+    session.initialized = true;
     
     return CONTINUE;
 }
@@ -50,6 +56,8 @@ fn SdlAppResult sdl_app_iter(void* appstate) {
     if (catch err = session.game.frame()) return FAILURE;
     
     session.platform.present();
+
+    if (session.diagnostics.has_errors) return FAILURE;
     
     return CONTINUE;
 }
@@ -110,27 +118,31 @@ fn void sdl_app_quit(void* appstate, SdlAppResult result) {
 // initialize the desktop game session and launch the game
 //-----------------------------------------------------------------------------
 fn void? Session.init(Session* self, int argc, ZString* argv) {
-    diagnostics_print(INFO, "Initializing Session");
+    self.diagnostics.info("Initializing Session");
     
-    *self = {};
-    self.platform.init()!;
+    self.platform.init(&self.diagnostics)!;
 
     String path = "./examples/game.punk";
-    platform_load_cart(&self.cart, path)!;
-
+    self.diagnostics.file_path = path;
+    self.platform.load_cart(&self.cart, path)!;
+    
     self.game.launch(&self.cart, &self.platform)!;
-
-    // platform
 }
 
 
 // shutdown the desktop game session
 //-----------------------------------------------------------------------------
 fn void Session.shutdown(Session* self) {
-    diagnostics_print(INFO, "Shutting Down Punk Desktop");
-    
-    // free resources
-    self.game.shutdown();
-    self.platform.shutdown();
+    self.diagnostics.info("Shutting Down Punk Desktop");
+
+    if (self.initialized) {
+        // free resources
+        self.game.shutdown();
+        self.platform.shutdown();
+    }
+
+    self.diagnostics.report();
+    self.diagnostics.destroy();
+    defer byte_buffer_release(&self.cart.file_bytes);
 }
 

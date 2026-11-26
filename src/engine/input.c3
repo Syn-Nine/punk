@@ -52,7 +52,7 @@ struct InputEvent {
 
 struct InputQueue {
     InputEvent[MAX_INPUT_QUEUE_COUNT] events;
-    sz count;
+    int count;
     bool overflowed;
 }
 
@@ -131,7 +131,7 @@ fn void InputState.process(InputState* self) {
         return;
     }
 
-    for (sz i = 0; i < self.queue.count; i++) {
+    for (int i = 0; i < self.queue.count; i++) {
         InputEvent evt = self.queue.events[i];
         switch (evt.kind) {
             case FOCUS_LOST:
