@@ -1,4 +1,6 @@
+//-----------------------------------------------------------------------------
 // token enumeration and utilities
+//-----------------------------------------------------------------------------
 module punk;
 import std::collections;
 
@@ -19,8 +21,10 @@ enum TokenKind {
     FALSE, 
     TRUE,
     PI,
+    START,
+    STOP,
     VAR,
-
+    
     //
     EOL,
     EOF,

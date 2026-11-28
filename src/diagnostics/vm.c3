@@ -8,6 +8,7 @@ import std::io;
 fn void Diagnostics.report_vm_dump_unknown_instruction(Diagnostics* self, VmOp inst) {
     Diagnostic d = {
         .severity = ERROR,
+        .component = VM,
         .span = {},
         .message = string::format(mem, "unknown instruction in image dump `%s`.", inst)
     };
@@ -19,6 +20,7 @@ fn void Diagnostics.report_vm_dump_unknown_instruction(Diagnostics* self, VmOp i
 fn void Diagnostics.report_vm_invalid_register_address(Diagnostics* self, int idx, int capacity) {
     Diagnostic d = {
         .severity = ERROR,
+        .component = VM,
         .span = {},
         .message = string::format(mem, "invalid VM register address=%d, capacity=%d.", idx, capacity)
     };
@@ -30,6 +32,7 @@ fn void Diagnostics.report_vm_invalid_register_address(Diagnostics* self, int id
 fn void Diagnostics.report_vm_unrecognized_inst_in_executive(Diagnostics* self, VmInst inst) {
     Diagnostic d = {
         .severity = ERROR,
+        .component = VM,
         .span = {},
         .message = string::format(mem, "unrecognized instruction in VM Executive `%s`.", inst.op)
     };

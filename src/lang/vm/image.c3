@@ -1,4 +1,6 @@
+//-----------------------------------------------------------------------------
 // structure and utilities for the bytecode image
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
 import std::collections;
@@ -8,7 +10,8 @@ import std::collections;
 //-----------------------------------------------------------------------------
 
 enum VmOp {
-    LOAD_CONST,
+    LOAD_INT,
+    LOAD_FLOAT,
 
     ADD,
     SUB,
@@ -18,10 +21,13 @@ enum VmOp {
     NEG,
     NOT,
 
-    HALT,
+    STOP,
 
     CALL_NATIVE,
     MOV,
+
+    RET,
+    RET_VOID,
 }
 
 enum VmValueKind {
@@ -63,12 +69,12 @@ struct VmFunction {
 
 struct ProgramImage {
     List{VmInst} code;
-    List{VmValue} constants;
+    List{VmValue} statics;
     List{VmFunction} functions;
     List{NativeFn} native_funcs;
+    HashMap{String,int} func_lookup;
     HashMap{String,int} native_lookup;
     Diagnostics* diagnostics;
-    int entry_function;
 }
 
 
@@ -93,29 +99,28 @@ fn void? ProgramImage.dump(ProgramImage* image) {
 
     io::printn("\nImage Dump:");
 
-    foreach (i : image.code) {
+    for (int ii = 0; ii < image.code.len(); ii++) {
+        VmInst* i = &image.code[ii];
+        io::printf("%d:", ii);
         switch (i.op) {
-            case LOAD_CONST:
-                VmValue* constant = &image.constants[i.src1];
-                if (constant.kind == INT) {
-                    io::printfn("%%%d = LOAD_CONST %d", i.dst, constant.data.ival);
-                }
-                else {
-                    io::printfn("%%%d = LOAD_CONST %f", i.dst, constant.data.fval);
-                }
-            
-            case ADD: io::printfn("%%%d = ADD %%%d, %%%d", i.dst, i.src1, i.src2);
-            case SUB: io::printfn("%%%d = SUB %%%d, %%%d", i.dst, i.src1, i.src2);
-            case MUL: io::printfn("%%%d = MUL %%%d, %%%d", i.dst, i.src1, i.src2);
-            case DIV: io::printfn("%%%d = DIV %%%d, %%%d", i.dst, i.src1, i.src2);
+            case LOAD_INT:   io::printfn("  %%%d = LOAD_INT %d", i.dst, image.statics[i.src1].data.ival);
+            case LOAD_FLOAT: io::printfn("  %%%d = LOAD_FLOAT %f", i.dst, image.statics[i.src1].data.fval);
             //
-            case NEG: io::printfn("%%%d = NEG %%%d", i.dst, i.src1);
-            case NOT: io::printfn("%%%d = NOT %%%d", i.dst, i.src1);
+            case ADD: io::printfn("  %%%d = ADD %%%d, %%%d", i.dst, i.src1, i.src2);
+            case SUB: io::printfn("  %%%d = SUB %%%d, %%%d", i.dst, i.src1, i.src2);
+            case MUL: io::printfn("  %%%d = MUL %%%d, %%%d", i.dst, i.src1, i.src2);
+            case DIV: io::printfn("  %%%d = DIV %%%d, %%%d", i.dst, i.src1, i.src2);
             //
-            case HALT: io::printfn("HALT");
+            case NEG: io::printfn("  %%%d = NEG %%%d", i.dst, i.src1);
+            case NOT: io::printfn("  %%%d = NOT %%%d", i.dst, i.src1);
             //
-            case CALL_NATIVE: io::printfn("CALL_NATIVE %d, %%%d, %d", i.src1, i.src2, i.src3);
-            case MOV: io::printfn("MOV %%%d, %%%d", i.dst, i.src1);
+            case STOP: io::printfn("  STOP");
+            //
+            case CALL_NATIVE: io::printfn("  CALL_NATIVE %d, %%%d, %d", i.src1, i.src2, i.src3);
+            case MOV: io::printfn("  MOV %%%d, %%%d", i.dst, i.src1);
+            //
+            case RET: io::printn("  RET");
+            case RET_VOID: io::printn("  RET_VOID");
             //
             default:
                 image.diagnostics.report_vm_dump_unknown_instruction(i.op);
@@ -123,6 +128,9 @@ fn void? ProgramImage.dump(ProgramImage* image) {
                 return BC_ERROR~;
         }
     }
+
+    io::printn("");
+
 }
 
 
@@ -130,7 +138,7 @@ fn void? ProgramImage.dump(ProgramImage* image) {
 //-----------------------------------------------------------------------------
 fn void ProgramImage.destroy(ProgramImage* image) {
     image.code.free();
-    image.constants.free();
+    image.statics.free();
     image.functions.free();
     image.native_funcs.free();
     image.native_lookup.free();

@@ -1,4 +1,6 @@
-// game code to token lex
+//-----------------------------------------------------------------------------
+// game code to token lexer
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
 import std::collections;
@@ -31,6 +33,8 @@ fn void? Lexer.init(Lexer* lex, Diagnostics* diagnostics, ByteBuffer buffer) {
     lex.keywords["pi"] = PI;
     lex.keywords["true"] = TRUE;
     lex.keywords["false"] = FALSE;
+    lex.keywords["start"] = START;
+    lex.keywords["stop"] = STOP;
     lex.keywords["var"] = VAR;
     lex.line = 1;
 }

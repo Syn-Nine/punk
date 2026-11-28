@@ -1,4 +1,6 @@
-// build AST
+//-----------------------------------------------------------------------------
+// parser to build AST
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
 
@@ -90,30 +92,88 @@ fn Token Parser.peek(Parser* p) {
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.parse_module(Parser* p, Ast* ast, Diagnostics* diagnostics, ByteBuffer buffer) {
+fn StmtId? Parser.parse_module(Parser* p, Ast* ast, Diagnostics* diagnostics, ByteBuffer buffer) {
+    diagnostics.info("Parsing Module");
     p.init(ast, diagnostics, buffer)!;
+    
+    StmtIdList global;
     while (!p.is_at_end()) {
-        p.statement()!;
+        StmtId id = p.statement()!;
+        if (-1 == id) continue;
+        StmtKind kind = ast.statements[(sz)id].kind;
+        if (kind == CONST || kind == VAR) global.push(id);
     }
+
+    Statement stmt = {
+        .kind = BLOCK,
+        .data = { .block_stmt = { global }},
+    };
+    return p.push_stmt(stmt);
 }
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.statement(Parser* p) {
+fn StmtId? Parser.statement(Parser* p) {
 
     while (p.check(EOL)) { p.advance()!; } // skip blank lines
-    if (p.is_at_end()) return; // nothing to do
+    if (p.is_at_end()) return -1; // nothing to do
 
+    if (p.check(L_BRACE)) return p.block_stmt()!;
+    if (p.check_any(START)) return p.handler_stmt()!;
     if (p.check(IDENTIFIER) && p.check_next(L_PAREN)) return p.call_stmt()!;
-    if (p.check(CONST)) return p.const_stmt()!;
-    if (p.check(VAR)) return p.var_stmt()!;
+    // if (p.check(CONST)) return p.const_stmt()!;
+    // if (p.check(VAR)) return p.var_stmt()!;
 
     return p.expr_stmt();
 }
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.call_stmt(Parser* p) {
+fn StmtId? Parser.block_stmt(Parser* p) {
+    SourceSpan span;
+    span.start = p.peek().span.start;
+    p.advance()!; // consume '{'
+
+    StmtIdList body;
+    while (!p.is_at_end() && !p.check(R_BRACE)) {
+        StmtId id = p.statement()!;
+        if (-1 < id) body.push(id);
+    }
+    
+    span.end = p.peek().span.end;
+    p.consume(R_BRACE, "expected '}' for block.")!;
+    p.consume_eol()!;
+
+    Statement stmt = {
+        .kind = BLOCK,
+        .data = { .block_stmt = { body }},
+        .span = span
+    };
+    return p.push_stmt(stmt);
+}
+
+
+//-----------------------------------------------------------------------------
+fn StmtId? Parser.handler_stmt(Parser* p) {
+    Token id = p.advance()!;
+
+    if (!p.check(L_BRACE)) {
+        p.diagnostics.report_parser_expected_lbrace_for_handler(p.peek());
+        return SRC_ERROR~;
+    }
+    
+    StmtId body = p.statement()!;
+    Statement stmt = {
+        .kind = HANDLER,
+        .data = { .handler_stmt = { .body = body, .name = id.text } },
+        .span = id.span
+    };
+    return p.push_stmt(stmt);
+}
+
+
+//-----------------------------------------------------------------------------
+fn StmtId? Parser.call_stmt(Parser* p) {
     Token id = p.advance()!;
     p.advance()!; // consume '('
     ExprIdList params;
@@ -131,38 +191,39 @@ fn void? Parser.call_stmt(Parser* p) {
         .kind = CALL_NATIVE,
         .data = { .call_native_stmt = { .id = id.text, .params = params } }
     };
-    p.push_stmt(stmt);
+    return p.push_stmt(stmt);
 }
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.const_stmt(Parser* p) {
-    // io::printn("const_stmt");
-    Token prev = p.advance()!;
-}
+// fn void? Parser.const_stmt(Parser* p) {
+//     // io::printn("const_stmt");
+//     Token prev = p.advance()!;
+// }
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.var_stmt(Parser* p) {
-    // io::printn("var_stmt");
-    // format: var id = val
-    p.advance()!; // consume var
-    Token id = p.consume(IDENTIFIER, "expected identifier.")!;
-    p.consume(EQUAL, "expected identifier.")!;
-    ExprId expr = p.expression()!;
-    p.consume_eol()!;
-}
+// fn void? Parser.var_stmt(Parser* p) {
+//     // io::printn("var_stmt");
+//     // format: var id = val
+//     p.advance()!; // consume var
+//     Token id = p.consume(IDENTIFIER, "expected identifier.")!;
+//     p.consume(EQUAL, "expected identifier.")!;
+//     ExprId expr = p.expression()!;
+//     p.consume_eol()!;
+// }
 
 
 //-----------------------------------------------------------------------------
-fn void? Parser.expr_stmt(Parser* p) {
+fn StmtId? Parser.expr_stmt(Parser* p) {
     // io::printn("expr_stmt");
     ExprId expr = p.expression()!;
     Statement stmt = {
         .kind = EXPRESSION,
-        .data = { .expr_stmt = { expr } }
+        .data = { .expr_stmt = { expr } },
+        .span = p.ast.expressions[expr].span
     };
-    p.push_stmt(stmt);
+    return p.push_stmt(stmt);
 }
 
 

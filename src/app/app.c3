@@ -26,6 +26,13 @@ struct Session {
 // desktop SDL entry
 //-----------------------------------------------------------------------------
 fn int main(String[] argv) {
+
+    if (2 == argv.len) {
+        if (argv[1] == "test-lang") {
+            return testing::lang::run_lang_tests();
+        }
+    }
+
     return sdl3::enterAppMainCallbacks(argv.len, (ZString*)argv, &sdl_app_init, &sdl_app_iter, &sdl_app_evt, &sdl_app_quit);
 }
 
@@ -125,7 +132,7 @@ fn void? Session.init(Session* self, int argc, ZString* argv) {
     String path = "./examples/game.punk";
     self.diagnostics.file_path = path;
     self.platform.load_cart(&self.cart, path)!;
-    
+
     self.game.launch(&self.cart, &self.platform)!;
 }
 
@@ -143,6 +150,6 @@ fn void Session.shutdown(Session* self) {
 
     self.diagnostics.report();
     self.diagnostics.destroy();
-    defer byte_buffer_release(&self.cart.file_bytes);
+    self.cart.destroy();
 }
 

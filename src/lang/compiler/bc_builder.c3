@@ -1,61 +1,62 @@
+//-----------------------------------------------------------------------------
 // utilities for lowering IR into VM bytecode
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
 
 
 //-----------------------------------------------------------------------------
 fn void? bc_codegen(IrBuilder* b, ProgramImage* image) {
+    b.diagnostics.info("Generating Bytecode Image");
 
-    VmFunction entry = {
-        .name = "entry",
+    // load static values
+    for (int i = 0; i < b.statics.len(); i++) {
+        IrValue* src = &b.statics[i];
+        if (src.kind == INT) {
+            image.statics.push({
+                .kind = INT,
+                .data = { .ival = src.data.ival }
+            });
+        } else if (src.kind == FLOAT) {
+            image.statics.push({
+                .kind = FLOAT,
+                .data = { .fval = src.data.fval }
+            });
+        }
+    }
+
+    // gen functions
+    for (int i = 0; i < b.funcs.len(); i++) {
+        image.func_lookup.set(b.funcs[i].name, i);
+        bc_codegen_func(b, image, i)!;
+    }
+    
+}
+
+
+//-----------------------------------------------------------------------------
+fn void? bc_codegen_func(IrBuilder* b, ProgramImage* image, int ftn) {
+    VmFunction func = {
+        .name = b.funcs[ftn].name,
         .code_start = (int)image.code.len(),
-        .register_count = (int)b.values.len(),
+        .register_count = (int)b.funcs[ftn].values.len(),
         .param_count = 0
     };
-    bc_codegen_constants(b, image)!;
-    bc_codegen_instructions(b, image)!;
-    entry.code_count = (int)image.code.len() - entry.code_start;
 
-    image.functions.push(entry);
-    image.entry_function = 0;
-}
-
-
-//-----------------------------------------------------------------------------
-fn void? bc_codegen_constants(IrBuilder* b, ProgramImage* image) {
-    foreach (reg : b.constants) {
-        IrValue* value = &b.values[reg];
-        VmValue constant;
-
-        switch (value.kind) {
-            case INT:
-                constant = {
-                    .kind = INT,
-                    .data = { .ival = value.data.ival }
-                };
-            case FLOAT:
-                constant = {
-                    .kind = FLOAT,
-                    .data = { .fval = value.data.fval }
-                };
-            default: return IR_ERROR~;
-        }
-
-        int addr = (int)image.constants.len();
-        image.constants.push(constant);
-        VmInst inst = {
-            .op = LOAD_CONST,
-            .dst = reg,
-            .src1 = addr
-        };
-        image.code.push(inst);        
+    for (int i = 0; i < b.funcs[ftn].block_ptrs.len(); i++) {
+        int bidx = b.funcs[ftn].block_ptrs[i];
+        bc_codegen_block(b, image, ftn, bidx)!;
     }
+    
+    func.code_count = (int)image.code.len() - func.code_start;
+    image.functions.push(func);
 }
 
 
 //-----------------------------------------------------------------------------
-fn void? bc_codegen_instructions(IrBuilder* b, ProgramImage* image) {
-    foreach (ir_inst : b.inst) {
+fn void? bc_codegen_block(IrBuilder* b, ProgramImage* image, int ftn, int bidx) {
+
+    foreach (ir_inst : b.blocks[bidx].inst) {
         VmInst vm_inst = {
             .dst = ir_inst.dst,
             .src1 = ir_inst.src1,
@@ -63,6 +64,9 @@ fn void? bc_codegen_instructions(IrBuilder* b, ProgramImage* image) {
         };
 
         switch (ir_inst.op) {
+            case LOAD_INT: vm_inst.op = LOAD_INT;
+            case LOAD_FLOAT: vm_inst.op = LOAD_FLOAT;
+            //
             case ADD: vm_inst.op = ADD;
             case SUB: vm_inst.op = SUB;
             case MUL: vm_inst.op = MUL;
@@ -71,15 +75,15 @@ fn void? bc_codegen_instructions(IrBuilder* b, ProgramImage* image) {
             case NEG: vm_inst.op = NEG;
             case NOT: vm_inst.op = NOT;
             //
-            case HALT: vm_inst.op = HALT;
+            case STOP: vm_inst.op = STOP;
             //
             case CALL_NATIVE:
                 // make mov instructions
-                int start_addr = b.next_addr();
+                int start_addr = b.funcs[ftn].next_addr();
                 int count = ir_inst.src3;
                 for (int i = 0; i < count; i++) {
-                    IrValue v = b.values[(sz)(ir_inst.src2 + i)]; // clone contents
-                    b.values.push(v); // allocate register
+                    IrValue v = b.funcs[ftn].values[(sz)(ir_inst.src2 + i)]; // clone contents
+                    b.funcs[ftn].values.push(v); // allocate register
                     VmInst mov_inst = {
                         .op = MOV,
                         .dst = start_addr + i,
@@ -92,7 +96,10 @@ fn void? bc_codegen_instructions(IrBuilder* b, ProgramImage* image) {
                 vm_inst.src2 = start_addr;
                 vm_inst.src3 = count;
 
-
+            //
+            case RET: vm_inst.op = RET;
+            case RET_VOID: vm_inst.op = RET_VOID;
+            //
             default:
                 b.diagnostics.report_bcbuilder_unknown_instruction({}, ir_inst.op);
                 return IR_ERROR~;

@@ -53,9 +53,11 @@ struct Platform {
     SdlRenderer* renderer;
     SdlTexture* framebuffer;
     Diagnostics* diagnostics;
+    Vm vm;
     Resources resources;
     Fonts fonts;
     long prev_ticks;
+    bool headless;
 }
 
 
@@ -74,113 +76,6 @@ fn int? Resources.push(Resources* self, Resource rsc) {
 }
 
 
-// init the desktop platform layer
-//-----------------------------------------------------------------------------
-fn void? Platform.init(Platform* self, Diagnostics* diagnostics) {
-    self.diagnostics = diagnostics;
-    self.diagnostics.info("Initializing Desktop Platform");
-    
-    if (!sdl3::init({ .video = true })) {
-        self.diagnostics.report_platform_failed_to_init_sdl(sdl3::getError());
-        return SDL_ERROR~;
-    }
-
-    if (!sdl3::createWindowAndRenderer(
-        "Punk Engine Demo",
-        320 * 4,
-        180 * 4,
-        { .resizable = true },
-        &self.window,
-        &self.renderer
-    )) return SDL_ERROR~;
-
-    sdl3::setWindowPosition(self.window, (int)sdl3::windowpos_centered(), (int)sdl3::windowpos_centered());
-    sdl3::setRenderLogicalPresentation(self.renderer, 320, 180, LETTERBOX);
-    sdl3::setRenderVSync(self.renderer, (SdlRendererVSync)1);
-
-    self.framebuffer = sdl3::createTexture(self.renderer, RGBA8888, TARGET, 320, 180);
-    sdl3::setTextureScaleMode(self.framebuffer, NEAREST);
-
-    self.fonts.init(self.renderer, tamzen16_fnt[..])!;
-}
-
-
-// shutdown the desktop platform layer
-//-----------------------------------------------------------------------------
-fn void Platform.shutdown(Platform* self) {
-    self.diagnostics.info("Shutting Down Desktop Platform");
-
-    self.fonts.shutdown();
-
-    for (int i = 0; i < self.resources.count; i++) {
-        Resource* rsc = &self.resources.db[i];
-        switch (rsc.kind) {
-            case TEXTURE:
-                if (rsc.data.texture.ptr != null) {
-                    sdl3::destroyTexture(rsc.data.texture.ptr);
-                    rsc.data.texture.ptr = null;
-                }
-            
-            default: break;
-        }
-    }
-
-    sdl3::destroyRenderer(self.renderer);
-    sdl3::destroyWindow(self.window);
-    
-    *self = {};
-}
-
-
-// load game cart
-//-----------------------------------------------------------------------------
-fn void? Platform.load_cart(Platform* self, Cart* cart, String path) {
-    self.diagnostics.info("Loading Game Cart");
-    
-    // read game code bytes from disk
-    self.read_file(path, &cart.file_bytes)!;
-    self.diagnostics.file_bytes = &cart.file_bytes;
-
-    // compile game code
-    Compiler compiler; defer compiler.destroy();
-    compiler.compile(self.diagnostics, cart.file_bytes)!;
-
-    Vm vm; defer vm.destroy();
-    vm.init(self.diagnostics, compiler.image)!;
-    
-    vm.run()!;
-
-}
-
-
-// load image
-//-----------------------------------------------------------------------------
-fn int? Platform.load_png(Platform* self, String path) {
-    self.diagnostics.info(string::tformat("Loading PNG: \"%s\"", path));
-    
-    SdlSurface* surf = sdl3::loadPNG(path);
-    if (surf == null) return IO_ERROR~;
-    defer sdl3::destroySurface(surf);
-
-    SdlTexture* tex = sdl3::createTextureFromSurface(self.renderer, surf);
-    if (tex == null) return SDL_ERROR~;
-
-    Resource rsc = {
-        .kind = TEXTURE,
-        .data = {
-            .texture = {
-                .ptr = tex,
-                .width = surf.w,
-                .height = surf.h
-            }
-        }
-    };
-    
-    int id = self.resources.push(rsc)!;
-    return id;
-}
-
-
 // number of nanoseconds passed since last call
 //-----------------------------------------------------------------------------
 fn long Platform.delta_ticks_ns(Platform* self) {
@@ -189,6 +84,7 @@ fn long Platform.delta_ticks_ns(Platform* self) {
     self.prev_ticks = now;
     return now - prev;
 }
+
 
 
 // convert graphics queue into native drawing commands
@@ -252,7 +148,6 @@ fn void Platform.draw(Platform* self, Graphics* graphics, Scratch* scratch) {
 }
 
 
-
 // sprite drawing helper
 //-----------------------------------------------------------------------------
 fn void Platform.draw_sprite_simple(Platform* self, RscTexture* tex, float x, float y, char r, char g, char b, char a) {
@@ -267,10 +162,95 @@ fn void Platform.draw_sprite_simple(Platform* self, RscTexture* tex, float x, fl
     sdl3::renderTexture(self.renderer, tex.ptr, null, &dst);
 }
 
+
 // platform state that must be initialized on the first game frame
 //-----------------------------------------------------------------------------
 fn void Platform.first_frame(Platform* self) {
     self.prev_ticks = (long)sdl3::getTicksNS();
+}
+
+
+// init the desktop platform layer
+//-----------------------------------------------------------------------------
+fn void? Platform.init(Platform* self, Diagnostics* diagnostics) {
+    self.diagnostics = diagnostics;
+    self.diagnostics.info("Initializing Desktop Platform");
+    
+    if (!sdl3::init({ .video = true })) {
+        self.diagnostics.report_platform_failed_to_init_sdl(sdl3::getError());
+        return SDL_ERROR~;
+    }
+
+    if (!sdl3::createWindowAndRenderer(
+        "Punk Engine Demo",
+        320 * 4,
+        180 * 4,
+        { .resizable = true },
+        &self.window,
+        &self.renderer
+    )) return SDL_ERROR~;
+
+    sdl3::setWindowPosition(self.window, (int)sdl3::windowpos_centered(), (int)sdl3::windowpos_centered());
+    sdl3::setRenderLogicalPresentation(self.renderer, 320, 180, LETTERBOX);
+    sdl3::setRenderVSync(self.renderer, (SdlRendererVSync)1);
+
+    self.framebuffer = sdl3::createTexture(self.renderer, RGBA8888, TARGET, 320, 180);
+    sdl3::setTextureScaleMode(self.framebuffer, NEAREST);
+
+    self.fonts.init(self.renderer, tamzen16_fnt[..])!;
+}
+
+
+// init the desktop platform layer as headless
+//-----------------------------------------------------------------------------
+fn void? Platform.init_headless(Platform* self, Diagnostics* diagnostics) {
+    self.diagnostics = diagnostics;
+    self.diagnostics.info("Initializing Headless Desktop Platform");
+    self.headless = true;
+}
+
+
+// load game cart
+//-----------------------------------------------------------------------------
+fn void? Platform.load_cart(Platform* self, Cart* cart, String path) {
+    self.diagnostics.info("Loading Game Cart");
+    *cart = { .diagnostics = self.diagnostics };
+
+    // read game code bytes from disk
+    self.read_file(path, &cart.file_bytes)!;
+    self.diagnostics.file_bytes = &cart.file_bytes;
+
+    // compile and load image into the vm
+    cart.compile()!;
+    self.vm.init(self.diagnostics, cart.image)!;
+}
+
+
+// load image
+//-----------------------------------------------------------------------------
+fn int? Platform.load_png(Platform* self, String path) {
+    self.diagnostics.info(string::tformat("Loading PNG: \"%s\"", path));
+    
+    SdlSurface* surf = sdl3::loadPNG(path);
+    if (surf == null) return IO_ERROR~;
+    defer sdl3::destroySurface(surf);
+
+    SdlTexture* tex = sdl3::createTextureFromSurface(self.renderer, surf);
+    if (tex == null) return SDL_ERROR~;
+
+    Resource rsc = {
+        .kind = TEXTURE,
+        .data = {
+            .texture = {
+                .ptr = tex,
+                .width = surf.w,
+                .height = surf.h
+            }
+        }
+    };
+    
+    int id = self.resources.push(rsc)!;
+    return id;
 }
 
 
@@ -325,3 +305,32 @@ fn void Platform.set_draw_color(Platform* self, Color color, char opacity) {
         sdl3::setRenderDrawColor(self.renderer, pal.r, pal.g, pal.b, pal.a);
     }
 }
+
+
+// shutdown the desktop platform layer
+//-----------------------------------------------------------------------------
+fn void Platform.shutdown(Platform* self) {
+    self.diagnostics.info("Shutting Down Desktop Platform");
+
+    self.fonts.shutdown();
+
+    for (int i = 0; i < self.resources.count; i++) {
+        Resource* rsc = &self.resources.db[i];
+        switch (rsc.kind) {
+            case TEXTURE:
+                if (rsc.data.texture.ptr != null) {
+                    sdl3::destroyTexture(rsc.data.texture.ptr);
+                    rsc.data.texture.ptr = null;
+                }
+            
+            default: break;
+        }
+    }
+
+    sdl3::destroyRenderer(self.renderer);
+    sdl3::destroyWindow(self.window);
+    
+    self.vm.destroy();
+    *self = {};
+}
+

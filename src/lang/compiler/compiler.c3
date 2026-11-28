@@ -1,4 +1,6 @@
+//-----------------------------------------------------------------------------
 // compiler context and utilities
+//-----------------------------------------------------------------------------
 module punk;
 import std::collections;
 import std::io;
@@ -11,6 +13,7 @@ import std::io;
 struct Compiler {
     List{Ast} modules;
     ProgramImage* image;
+    Diagnostics* diagnostics;
 }
 
 
@@ -19,62 +22,101 @@ struct Compiler {
 //-----------------------------------------------------------------------------
 
 //-----------------------------------------------------------------------------
-fn void? Compiler.compile(Compiler* ctx, Diagnostics* diagnostics, ByteBuffer bytes) {
+fn void? Compiler.compile(Compiler* self, ProgramImage* image, ByteBuffer bytes) {
 
     Ast ast; defer ast.destroy();
     Parser p;
-    p.parse_module(&ast, diagnostics, bytes)!;
-
-    if (ast.statements.len() == 0) return;
-
-    ctx.image = mem::new(ProgramImage);
-    ctx.image.diagnostics = diagnostics;
+    StmtId global_block = p.parse_module(&ast, self.diagnostics, bytes)!;
+    if (ast.statements.is_empty()) {
+        self.diagnostics.report_compiler_module_is_empty();
+    }
     
-    io::printn(ast);
+    bool debug = false;
+    if (debug) {
+        io::printn("AST:");
+        io::printn(ast);
 
+        io::printn("\nStatements:");
+        foreach (s : ast.statements) {
+            io::printn(s.kind);
+        }
 
-    foreach (s : ast.statements) {
-        io::printn(s.kind);
+        io::printn("\nExpressions:");
+        foreach (e : ast.expressions) {
+            io::printn(e.kind);
+        }
     }
-
-    foreach (e : ast.expressions) {
-        io::printn(e.kind);
-    }
+    
+    self.image = image;
+    self.image.register_native("print", 0, &native_print);
     
     IrBuilder b;
-    b.diagnostics = diagnostics;
-
-    ctx.image.register_native("print", 0, &native_print);
+    b.init(self.diagnostics, self.image);
     
-    b.image = ctx.image;
+    self.diagnostics.info("Compiling Game");
 
-    for (int i = 0; i < ast.statements.len(); i++) {
-        stmt_codegen(&ast, &b, i)!;
+    // codegen handlers
+    for (int s = 0; s < ast.statements.len(); s++) {
+        if (ast.statements[s].kind == HANDLER) {
+            handler_codegen(&ast, &b, s)!;
+        }
     }
-    b.make_halt();
-    b.dump()!;
-    
 
-    bc_codegen(&b, ctx.image)!;
-    ctx.image.dump()!;
-    
+    global_codegen(&ast, &b, global_block)!;
+    b.dump()!;
+
+    bc_codegen(&b, self.image)!;
+    self.image.dump()!;
 }
 
 
 //-----------------------------------------------------------------------------
-fn void Compiler.destroy(Compiler* ctx) {
-    foreach (m : ctx.modules) {
+fn void Compiler.destroy(Compiler* self) {
+    foreach (m : self.modules) {
         m.destroy();
     }
-    ctx.modules.free();
+    self.modules.free();
+}
+
+
+//-----------------------------------------------------------------------------
+fn void? global_codegen(Ast* ast, IrBuilder* b, int idx) {
+    int ftn = b.make_function("__global");
+    b.set_function(ftn);
+
+    int bb = b.make_basic_block("entry", ftn);
+    b.set_block(bb);
+
+    stmt_codegen(ast, b, idx)!;
+    
+    b.make_ret_void();
+    b.verify_func(ftn)!;
+}
+
+
+//-----------------------------------------------------------------------------
+fn void? handler_codegen(Ast* ast, IrBuilder* b, int idx) {
+    StmtHandler* stmt = &ast.statements[idx].data.handler_stmt;
+    
+    int ftn = b.make_function(stmt.name);
+    b.set_function(ftn);
+
+    int bb = b.make_basic_block("entry", ftn);
+    b.set_block(bb);
+
+    stmt_codegen(ast, b, stmt.body)!;
+    
+    b.make_ret_void();
+    b.verify_func(ftn)!;
 }
 
 
 //-----------------------------------------------------------------------------
 fn void? stmt_codegen(Ast* ast, IrBuilder* b, int idx) {
-    io::printn("stmt_codegen");
+    // io::printn("stmt_codegen");
     Statement* stmt = &ast.statements[idx];
     switch (stmt.kind) {
+        case BLOCK: stmt_codegen_block(ast, b, stmt.data.block_stmt)!;
         case CALL_NATIVE: stmt_codegen_call_native(ast, b, stmt.data.call_native_stmt)!;
         case EXPRESSION: expr_codegen(ast, b, stmt.data.expr_stmt.expr)!;
         default:
@@ -84,6 +126,15 @@ fn void? stmt_codegen(Ast* ast, IrBuilder* b, int idx) {
 }
 
 
+//-----------------------------------------------------------------------------
+fn void? stmt_codegen_block(Ast* ast, IrBuilder* b, StmtBlock stmt) {
+    foreach (s : stmt.body) {
+        stmt_codegen(ast, b, s)!;
+    }
+}
+
+
+//-----------------------------------------------------------------------------
 fn void? stmt_codegen_call_native(Ast* ast, IrBuilder* b, StmtCallNative stmt) {
     int id = b.image.native_lookup.get(stmt.id)!;
     List{int} values;
@@ -113,7 +164,7 @@ fn int? expr_codegen(Ast* ast, IrBuilder* b, int idx) {
 
 //-----------------------------------------------------------------------------
 fn int? expr_codegen_binary(Ast* ast, IrBuilder* b, ExprBinary expr) {
-    io::printn("expr_codegen_binary");
+    // io::printn("expr_codegen_binary");
     int lhs = expr_codegen(ast, b, expr.lhs)!;
     int rhs = expr_codegen(ast, b, expr.rhs)!;
     switch (expr.op.kind) {
@@ -131,14 +182,14 @@ fn int? expr_codegen_binary(Ast* ast, IrBuilder* b, ExprBinary expr) {
 
 //-----------------------------------------------------------------------------
 fn int? expr_codegen_group(Ast* ast, IrBuilder* b, ExprGroup expr) {
-    io::printn("expr_codegen_group");
+    // io::printn("expr_codegen_group");
     return expr_codegen(ast, b, expr.expr)!;
 }
 
 
 //-----------------------------------------------------------------------------
 fn int? expr_codegen_literal(Ast* ast, IrBuilder* b, ExprLiteral expr) {
-    io::printn("expr_codegen_literal");
+    // io::printn("expr_codegen_literal");
     switch (expr.value.kind) {
         case INTEGER: return b.make_int(expr.value.text.to_int()!);
         case FLOAT: return b.make_float(expr.value.text.to_float()!);
@@ -152,7 +203,7 @@ fn int? expr_codegen_literal(Ast* ast, IrBuilder* b, ExprLiteral expr) {
 
 //-----------------------------------------------------------------------------
 fn int? expr_codegen_unary(Ast* ast, IrBuilder* b, ExprUnary expr) {
-    io::printn("expr_codegen_unary");
+    // io::printn("expr_codegen_unary");
     int rhs = expr_codegen(ast, b, expr.rhs)!;
     switch (expr.op.kind) {
         case BANG: return b.make_not(rhs);

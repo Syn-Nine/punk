@@ -10,11 +10,26 @@ import std::core::mem;
 // ENUMERATIONS
 //-----------------------------------------------------------------------------
 
-enum Severity : int (String label) {
-    INFO    { "INFO" },
-    ERROR   { "ERROR" },
-    WARNING { "WARNING"},
+enum DiagnosticSeverity {
+    INFO,
+    ERROR,
+    WARNING,
 }
+
+enum DiagnosticComponent {
+    BC_BUILDER,
+    COMPILER,
+    IR_BUILDER,
+    LEXER,
+    PARSER,
+    PLATFORM,
+    VM,
+}
+
+
+//-----------------------------------------------------------------------------
+// ENUMERATIONS
+//-----------------------------------------------------------------------------
 
 struct SourceSpan {
     int file_id;
@@ -24,7 +39,8 @@ struct SourceSpan {
 }
 
 struct Diagnostic {
-    Severity severity;
+    DiagnosticSeverity severity;
+    DiagnosticComponent component;
     SourceSpan span;
     String message;
 }
@@ -45,7 +61,7 @@ struct Diagnostics (Printable) {
 // print info message to console
 //-----------------------------------------------------------------------------
 fn void Diagnostics.info(Diagnostics* self, String message) {
-    io::printfn("[%s] %s", Severity.INFO.label, message);
+    io::printfn("[%s] %s", DiagnosticSeverity.INFO, message);
 }
 
 
@@ -74,7 +90,8 @@ fn void Diagnostics.push(Diagnostics* self, Diagnostic d) {
 
 //-----------------------------------------------------------------------------
 fn void Diagnostics.report(Diagnostics* self) {
-    io::printn("Diagnostics Report:");
+    if (self.entries.is_empty()) return;
+    io::printn("[DIAGNOSTICS]");
     io::printn(self);
 }
 
@@ -106,8 +123,13 @@ fn void append_diagnostic(DString* out, Diagnostic* d, String source, String pat
     int start = d.span.start;
     int end = d.span.end;
     
+    if (d.span.line == 0) {
+        out.appendf("%s(%s):%s: %s\n", d.severity, d.component, path, d.message);
+        return;
+    }
+
     if (start < 0 || end < start || end > source.len || start == end) {
-        out.appendf("%s:%s:%d: %s\n", d.severity.label, path, d.span.line, d.message);
+        out.appendf("%s(%s):%s:%d: %s\n", d.severity, d.component, path, d.span.line, d.message);
         return;
     }
 
@@ -146,7 +168,7 @@ fn void append_diagnostic(DString* out, Diagnostic* d, String source, String pat
 
     out.append_char('\n');
     out.append_char_repeat(' ', gutter);
-    out.appendf(" └►%s:%s:%d:%d: %s\n", d.severity.label, path, d.span.line, caret_start - line_start + 1, d.message);
+    out.appendf(" └🞂%s(%s):%s:%d:%d: %s\n", d.severity, d.component, path, d.span.line, caret_start - line_start + 1, d.message);
 }
 
 

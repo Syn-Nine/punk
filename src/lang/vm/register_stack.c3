@@ -1,6 +1,13 @@
+//-----------------------------------------------------------------------------
 // structure and utilities for the register stack
+//-----------------------------------------------------------------------------
 module punk;
 import std::io;
+
+
+//-----------------------------------------------------------------------------
+// STRUCTURES
+//-----------------------------------------------------------------------------
 
 struct RegisterStack {
     VmValue* data;
@@ -11,7 +18,7 @@ struct RegisterStack {
 
 //-----------------------------------------------------------------------------
 fn void? RegisterStack.create(RegisterStack* stack) {
-    io::printn("Creating Register Stack");
+    // io::printn("Creating Register Stack");
     stack.ensure_capacity(1024)!;
 }
 
@@ -25,7 +32,7 @@ fn void? RegisterStack.ensure_capacity(RegisterStack* stack, int count) {
     while (new_capacity < req_capacity) { new_capacity *= 2; }
     stack.data = realloc(stack.data, VmValue::size * new_capacity);
     stack.capacity = new_capacity;
-    io::printfn("New Register Stack Capacity: %d", new_capacity);
+    // io::printfn("New Register Stack Capacity: %d", new_capacity);
 }
 
 

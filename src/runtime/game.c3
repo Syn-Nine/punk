@@ -14,13 +14,6 @@ const MAX_SCRATCH_BYTES = 64 * 1024;
 // STRUCTURES
 //-----------------------------------------------------------------------------
 
-// holds game code and content
-struct Cart {
-    ByteBuffer file_bytes;
-}
-
-
-
 struct Game {
     Cart* cart;
     Platform* platform;
@@ -60,8 +53,8 @@ fn void? Game.frame(Game* self) {
     if (self.first_frame) {
         self.platform.first_frame();
         self.first_frame = false;
-        self.dispatch_globals()!;
-        self.dispatch_init()!;
+        self.dispatch_global()!;
+        self.dispatch_if_defined("start")!;
     }
     long delta_ns = self.platform.delta_ticks_ns();
     
@@ -72,7 +65,7 @@ fn void? Game.frame(Game* self) {
     for (int step = 0; step < steps; step++) {
         self.input.process();
         self.dispatch_bindings()!;
-        self.dispatch_update()!;
+        self.dispatch_if_defined("update")!;
         self.dispatch_timers()!;
     }
 
@@ -93,15 +86,16 @@ fn void Game.shutdown(Game* self) {
 
 // run game global code block
 //-----------------------------------------------------------------------------
-fn void? Game.dispatch_globals(Game* self) {
+fn void? Game.dispatch_global(Game* self) {
     int id = self.platform.load_png("./examples/sprites.png")!;
+    self.platform.vm.dispatch_global()!;
 }
 
 
 // run game init code block
 //-----------------------------------------------------------------------------
-fn void? Game.dispatch_init(Game* self) {
-
+fn void? Game.dispatch_if_defined(Game* self, String name) {
+    self.platform.vm.dispatch_if_defined(name)!;
 }
 
 
@@ -152,13 +146,6 @@ fn void? Game.dispatch_draw(Game* self) => @pool() {
     }
     graphics.end_pass();
     self.platform.draw(graphics, &self.scratch);
-
-}
-
-
-// run game update block
-//-----------------------------------------------------------------------------
-fn void? Game.dispatch_update(Game* self) {
 
 }
 

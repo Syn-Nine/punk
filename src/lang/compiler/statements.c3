@@ -1,4 +1,6 @@
+//-----------------------------------------------------------------------------
 // data structures to hold statements
+//-----------------------------------------------------------------------------
 module punk;
 import std::collections;
 
@@ -15,6 +17,7 @@ enum StmtKind : int {
     EXPRESSION,
     FORMAT,
     FUNCTION,
+    HANDLER,
     IF,
     RETURN,
     VAR,
@@ -27,7 +30,12 @@ enum StmtKind : int {
 //-----------------------------------------------------------------------------
 
 struct StmtBlock {
-    StmtIdList block;
+    StmtIdList body;
+}
+
+struct StmtCallNative {
+    String id;
+    ExprIdList params;
 }
 
 struct StmtConst {
@@ -39,9 +47,11 @@ struct StmtExpr {
     ExprId expr;
 }
 
-struct StmtCallNative {
-    String id;
-    ExprIdList params;
+struct StmtHandler {
+    StmtId body;
+    ExprId guard;
+    String name;
+    bool has_guard;
 }
 
 struct StmtVar {
@@ -57,9 +67,10 @@ struct StmtWhile {
 
 union StmtData {
     StmtBlock block_stmt;
+    StmtCallNative call_native_stmt;
     StmtConst const_stmt;
     StmtExpr expr_stmt;
-    StmtCallNative call_native_stmt;
+    StmtHandler handler_stmt;
     StmtVar   var_stmt;
     StmtWhile while_stmt;
 }
